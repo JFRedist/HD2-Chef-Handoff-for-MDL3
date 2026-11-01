@@ -15,8 +15,9 @@ local function pack(...) return { n = select('#', ...), ... } end
 -- the globals a Chef mod has (its own copies of the libraries; os and io cut down)
 local function sandbox_env(S)
   local env = {}
-  for _, name in ipairs({ 'assert', 'error', 'ipairs', 'next', 'pairs', 'pcall', 'rawget', 'rawset', 'select',
-                          'tonumber', 'tostring', 'type', 'unpack', 'xpcall', 'string', 'table', 'math', 'coroutine' }) do
+  for _, name in ipairs({ 'assert', 'error', 'ipairs', 'next', 'pairs', 'pcall', 'rawequal', 'rawget', 'rawset', 'select',
+                          'setmetatable', 'tonumber', 'tostring', 'type', 'unpack', 'xpcall', 'string', 'table', 'math',
+                          'coroutine' }) do
     env[name] = _G[name]
   end
   env.os = { clock = os.clock, time = os.time, date = os.date, difftime = os.difftime, getenv = os.getenv }
@@ -72,10 +73,16 @@ local function make_engine(S)
     peer_id = function() return 7 end,
   }
   E.GameSession = {
+    in_session = function() return true end,
+    game_session_host = function() return S.host_is_me ~= false and 7 or 3 end,
+    peers = function() return S.other_peers and { 7, 3 } or { 7 } end,
+    other_peers = function() return S.other_peers and { 3 } or {} end,
+    game_object_owner = function(_, id) return S.objects[id] and S.objects[id].owner end,
     objects_owned_by = function(s, peer)
-      if s ~= 'SESSION' or peer ~= 7 then return nil end
+      if s ~= 'SESSION' then return nil end
+      if peer ~= 7 and not (peer == 3 and S.other_peers) then return nil end
       local ids = {}
-      for id in pairs(S.objects) do if S.objects[id].owner == 7 then ids[#ids + 1] = id end end
+      for id in pairs(S.objects) do if S.objects[id].owner == peer then ids[#ids + 1] = id end end
       table.sort(ids)
       return ids
     end,
@@ -83,8 +90,10 @@ local function make_engine(S)
     game_object_field_batched = function(_, id, _t)
       local o = S.objects[id]
       if not o then error('CRASH: object does not exist') end
+      if o.owner ~= 7 then S.foreign_reads = (S.foreign_reads or 0) + 1 end
       S.batched_ids = S.batched_ids or {}
       S.batched_ids[id] = (S.batched_ids[id] or 0) + 1
+      S.batched_frame = (S.batched_frame or 0) + 1
       local out = {}
       for k, v in pairs(o.fields) do
         if type(v) == 'table' and not S.vectors[v] then
@@ -103,8 +112,10 @@ local function make_engine(S)
     unit_to_game_object_id = function(sync, u)
       if sync ~= 'SYNC' then return nil end
       stale(u)
+      S.lookups = (S.lookups or 0) + 1
       return u.objid
     end,
+    game_object_id_to_unit = function() return nil end,
   }
   E.Wwise = { load_bank = function() end, unload_bank = function() end }
   E.WwiseWorld = { trigger_event = function() end, make_auto_source = function() end,
@@ -169,8 +180,10 @@ function H.new(opts)
     function chef.title(text) S.title = text end
     function chef.option(id, spec)
       if spec.heading and not chef.capabilities.option_headings then error('unknown spec field heading') end
-      S.rows[id] = { spec = spec, value = spec.default }
-      return spec.default
+      local value = spec.default
+      if opts.options and opts.options[id] ~= nil then value = opts.options[id] end      -- a row the test has set beforehand
+      S.rows[id] = { spec = spec, value = value }
+      return value
     end
     function chef.get(id) return S.rows[id] and S.rows[id].value end
     function chef.set(id, value)
@@ -290,7 +303,9 @@ function H.new(opts)
     self.frame = self.frame + 1
     if self.script then self.script(self) end
     local c0 = os.clock()
+    self.batched_frame = 0
     if self.addon.update then self.addon.update(dt) end
+    if (self.batched_frame or 0) > (self.max_batched_frame or 0) then self.max_batched_frame = self.batched_frame end
     if self.addon.render then self.addon.render() end
     self.cpu = (self.cpu or 0) + (os.clock() - c0)
   end

@@ -12,12 +12,16 @@
 --   bfv_probe_summary.txt  counters, the unit kinds seen, and calls the loader refused
 --
 -- It changes nothing in the game. Every engine call goes through chef.call / chef.call_kind / the chef.unit_*
--- helpers (the loader's crash guard). The one stage that might still end the game, reading enemies' network game
--- objects, is OFF until you switch it on in the F9 menu.
+-- helpers (the loader's crash guard). The one stage that has ended the game for other mods, reading OTHER players'
+-- network game objects, is OFF until you switch it on in the F9 menu.
+--
+-- 0.2.0, after the first real run (see docs/probe-run-1.md): enemies are noticed dying 5 s earlier (the animation
+-- state they sit in for their last 5 s), the crosshair is followed with the ray test until a unit dies, every game
+-- object of mine is looked at (0.1.0 saw only the 40 oldest) and the unit under the crosshair is tied to its game object.
 local chef = ...
 if type(chef) ~= 'table' then return end
 
-local VERSION = '0.1.0'
+local VERSION = '0.2.0'
 local M = { version = VERSION }
 
 if chef.own_log then chef.own_log('bfv_probe') end   -- first thing: from here chef.log writes bfv_probe.log
@@ -27,16 +31,43 @@ if chef.own_log then chef.own_log('bfv_probe') end   -- first thing: from here c
 -- ---------------------------------------------------------------------------------------------------------------------
 local RUNTIME_KIND = '46cab355bd8d4d37'   -- runtime-built units: the loader says never to ask them where they are
 local RADIUS       = 100                  -- metres around the camera in which units are followed
-local TRACK_MAX    = 120                  -- most units followed at once
+local TRACK_MAX    = 120                  -- most units with an animation state machine followed at once
+local TRACK_NOSM   = 24                   -- most units without one (parts, projectiles): they must not take the places of the others
 local SCAN_EVERY   = 3                    -- seconds between scans of the world's unit list
 local SCAN_FAST    = 1.2                  -- ... for the first scans of a world, while unit kinds are being sorted out
 local SCAN_BUDGET  = 250                  -- units looked at per frame while a scan runs
 local SAMPLE_CYCLE = 0.15                 -- seconds for one pass over the followed units
-local OBJ_PERIOD   = 0.20                 -- seconds between samples of game objects
-local OBJ_TRACK    = 8                    -- most of my own game objects followed
-local EOBJ_TRACK   = 12                   -- most enemy game objects followed (risky stage)
+local OBJ_PERIOD   = 0.20                 -- seconds between samples of the game objects that have a field layout of their own
+local OBJ_TRACK    = 16                   -- most of those followed
+local OBJ_LIMIT    = 3000                 -- most game objects of mine known at once
+local OBJ_NARROW   = 40                   -- ... with the "all objects" row off: only the oldest ones, as 0.1.0 did
+local DESCRIBE_MAX = 6                    -- game objects looked at for the first time per frame
+local SWEEP_IDLE   = 5                    -- game objects of the shared layouts read per frame
+local SWEEP_BUSY   = 14                   -- ... while the fire button is held and for 3 s after a mark
+local LINK_PERIOD  = 0.25                 -- seconds between looks at the units under the crosshair
+local LINK_NEAR    = 3                    -- most units under the crosshair looked up at a time
+local LINK_CENSUS  = 80                   -- most other units looked up per world (one per half second)
 local LOG_CAP      = 900000               -- bytes of bfv_probe.log written per launch (the loader restarts a file at 1 MB)
-local TAG_CAP      = { UNIT = 1500, OBJ = 3000, EOBJ = 2500, AIM = 800, FIRE = 2500, KIND = 700, OBJSIG = 80 }
+local TAG_CAP      = { UNIT = 800, STATE = 800, DEATH = 1000, OBJ = 1500, GRP = 1500, AIMOBJ = 1000, AIM = 600,
+                       FIRE = 1500, KIND = 500, OBJSIG = 200, NEW = 400, GONE = 400, SIGKIND = 150, IGNORE = 60,
+                       LINK = 300 }
+
+-- Kinds that are never followed. Run 1 (0.1.0): these three made 667 of the 844 UNIT lines. Two are parts that come and
+-- go with every enemy (no state machine), one is a short-lived unit (1.6 s) flying around the player.
+local IGNORE = { ['40ae90fff236865b'] = 'part', ['d40f23a128bd988d'] = 'part', ['620769fb47f74906'] = 'short' }
+
+-- The animation state (four numbers, as animation_get_state gives them) an enemy sits in for its last 5 s: run 1 showed
+-- the unit entering it 5.0 s before its state machine went away. Seeds for the kinds run 1 saw; other kinds are learned
+-- (a state held for 3.5 s or more when the machine went away, twice). A hunter's last number differs (1, 3 or 5), and
+-- 0,0,0,1 was also seen before the last state, so a DEATH can be taken back: it is logged as DEATH cancel.
+local DEATH_SEED = {
+  ['09872e66d1276e1f'] = { '26,0,0,35' },
+  ['a1f37bf2a40fbde4'] = { '26,0,0,35' },
+  ['c14e0e887e7d2106'] = { '18,29,1,0', '18,18,1,0' },
+  ['a478d36a62a861f4'] = { '0,0,0,1', '0,0,0,3', '0,0,0,5' },
+  ['d522fd4748d443a5'] = { '24,1,36,1', '24,2,36,1' },
+  ['1a7fcdff98c664b0'] = { '12,0,15,30' },
+}
 
 -- @@BEGIN tiers@@
 -- The four feedback tiers of the MDL3 build, 142 unit resource ids (from its HD2_EVENT_TYPE_MAP, by
@@ -99,6 +130,9 @@ local function tier_of(kind) return TIERS[kind] or '?' end
 -- ---------------------------------------------------------------------------------------------------------------------
 local logged, capped = 0, false
 local tag_lines, tag_dropped = {}, {}
+-- Tags that stop at 65% of the log budget, so a long mission cannot use it all up before the lines that matter most (DEATH,
+-- UNIT, AIMOBJ, MARK) are written.
+local LOW_TAGS = { GRP = true, OBJ = true, STATE = true, AIM = true, FIRE = true, NEW = true, GONE = true, OBJSIG = true }
 
 local function emit(tag, text, always)
   local cap = TAG_CAP[tag]
@@ -108,13 +142,17 @@ local function emit(tag, text, always)
     return
   end
   if capped and not always then return end
+  if LOW_TAGS[tag] and logged > 0.65 * LOG_CAP and not always then
+    tag_dropped[tag] = (tag_dropped[tag] or 0) + 1
+    return
+  end
   tag_lines[tag] = n
   local line = string.format('t=%.2f %s %s', chef.time(), tag, text)
   if #line > 1600 then line = line:sub(1, 1600) .. '...' end
   logged = logged + #line + 1
   if logged > LOG_CAP and not always then
     capped = true
-    chef.log('%s', string.format('t=%.2f CAP the log budget is used up; only MARK, ERR and SUM lines go on', chef.time()))
+    chef.log('%s', string.format('t=%.2f CAP the log budget is used up; from here only MARK, SUM and error lines are written', chef.time()))
     return
   end
   chef.log('%s', line)
@@ -214,41 +252,80 @@ local function sorted_keys(t, limit)
   return keys
 end
 
--- one value as short text (numbers keep their precision where it matters, vectors become x,y,z)
-local function scalar(v)
+-- Text in a game object (a name, an id) is not logged, but where two objects hold the same text the log shows it:
+-- str#3:16 is the third different text seen, 16 characters long.
+local PSEUDO, pseudo_n = {}, 0
+local function pseudo(v)
+  local p = PSEUDO[v]
+  if not p then
+    if pseudo_n >= 600 then return 'str#?:' .. #v end
+    pseudo_n = pseudo_n + 1
+    p = 'str#' .. pseudo_n .. ':' .. #v
+    PSEUDO[v] = p
+  end
+  return p
+end
+
+-- one field value as comparable data: numbers, booleans and texts as they are; a vector as a short text that starts
+-- with a control character (so it cannot be taken for a text of the game)
+local function raw(v)
   local t = type(v)
   if t == 'number' then
-    if v ~= v then return 'nan' end
-    if v == math.floor(v) and v > -1e15 and v < 1e15 then return string.format('%.0f', v) end
-    return string.format('%.5g', v)
-  elseif t == 'boolean' or t == 'nil' then
-    return tostring(v)
-  elseif t == 'string' then
-    return 'str(' .. #v .. ')'                -- the text itself is not logged (a player object may hold a name)
-  elseif t == 'table' then
-    return '{table}'
+    if v ~= v then return '\1nan' end
+    return v
+  elseif t == 'boolean' or t == 'string' then
+    return v
   elseif t == 'userdata' then
     local x, y, z = chef.call('Vector3.to_elements', v)
     if type(x) == 'number' and type(y) == 'number' and type(z) == 'number' then
-      return string.format('vec(%.4g,%.4g,%.4g)', x, y, z)
+      return string.format('\1vec(%.4g,%.4g,%.4g)', x, y, z)
     end
-    return 'userdata'
+    return '\1userdata'
   end
-  return t
+  return '\1{' .. t .. '}'
 end
 
--- a game object's fields as path -> text: a field that is a table is opened one level (its entries as field.entry)
+-- two raw values the log would show alike (numbers: to about five digits)
+local function same(a, b)
+  if a == b then return true end
+  if type(a) == 'number' and type(b) == 'number' then
+    local d = a - b
+    if d < 0 then d = -d end
+    local m = a < 0 and -a or a
+    return d <= 1e-5 * (m > 1 and m or 1)
+  end
+  return false
+end
+
+-- a raw value as text for the log
+local function show(v)
+  local t = type(v)
+  if t == 'number' then
+    if v == math.floor(v) and v > -1e15 and v < 1e15 then return string.format('%.0f', v) end
+    return string.format('%.5g', v)
+  elseif t == 'string' then
+    if v:byte(1) == 1 then return v:sub(2) end
+    return pseudo(v)
+  end
+  return tostring(v)
+end
+
+-- a game object's fields as path -> raw value: a field that is a table is opened one level (its entries as field.entry)
+local keystr = setmetatable({}, { __index = function(t, k) local text = tostring(k); t[k] = text; return text end })
 local function flatten(fields, out)
   local n = 0
-  for _, k in ipairs(sorted_keys(fields, 160)) do
+  for k, v in pairs(fields) do
     n = n + 1
-    local v = fields[k]
+    if n > 200 then break end
     if type(v) == 'table' then
-      for _, k2 in ipairs(sorted_keys(v, 64)) do
-        out[tostring(k) .. '.' .. tostring(k2)] = scalar(v[k2])
+      local m = 0
+      for k2, v2 in pairs(v) do
+        m = m + 1
+        if m > 64 then break end
+        out[keystr[k] .. '.' .. keystr[k2]] = raw(v2)
       end
     else
-      out[tostring(k)] = scalar(v)
+      out[keystr[k]] = raw(v)
     end
   end
   return out
@@ -263,9 +340,10 @@ local mission_t0 = nil
 local fire_down, fire_since, last_fire_down, last_fire_up = false, nil, nil, nil
 local clicks = 0
 local marks = { kill = 0, hit = 0, other = 0 }
+local A = { next = 0, samples = 0, hits = 0 }              -- the aim ray tests (see aim_step)
 local cam = nil                                        -- {x,y,z,fx,fy,fz} copied each frame
 
-local cfg = { units = true, player = true, aim = true, enemyobj = false, hud = true }
+local cfg = { units = true, player = true, wide = true, aim = true, link = true, remote = false, hud = true }
 
 local function since_fire()
   if fire_down then return string.format('held %.2fs', now - (fire_since or now)) end
@@ -396,12 +474,15 @@ end
 -- ---------------------------------------------------------------------------------------------------------------------
 -- What kind of unit moves, has a state machine and how often it died is true in every mission, so the kinds table
 -- outlives worlds; what is followed (and the per-world counters) starts again with each world.
-local KINDS, TOT = {}, { scans = 0, spawned = 0, deaths = 0, gone = 0, kinds = 0, bodies = 0 }
+local KINDS = {}
+local TOT = { scans = 0, spawned = 0, deaths = 0, gone = 0, kinds = 0, bodies = 0, dying = 0, late = 0, cancels = 0, learned = 0 }
 local U
+local recent_deaths = {}                                -- the last DEATH events: { t, id, kind }
 local function units_reset()
   for _, K in pairs(KINDS) do K.n, K.probe, K.probe_n, K.moved_check = 0, {}, 0, false end
-  U = { kinds = KINDS, tracked = {}, tracked_n = 0, order = {}, cursor = 1, scan = nil, next_scan = 0,
+  U = { kinds = KINDS, tracked = {}, tracked_n = 0, tracked_nosm = 0, order = {}, cursor = 1, scan = nil, next_scan = 0,
         scans = 0, seq = 0, spawned = 0, deaths = 0, gone = 0, dead = {}, dead_n = 0 }
+  recent_deaths = {}
 end
 units_reset()
 
@@ -433,12 +514,19 @@ local function kind_of(k)
   local K = U.kinds[k]
   if not K then
     K = { n = 0, max = 0, probe = {}, probe_n = 0, checks = 0, rechecks = 0, mover = nil, sm = nil, sm_tries = 0,
-          deaths = 0, gone = 0, first = now, logged = false }
+          deaths = 0, gone = 0, first = now, logged = false, ignore = IGNORE[k], short = 0, term = {}, sigs = {},
+          dying = 0, cancels = 0, late = 0, lag_n = 0, lag_sum = 0 }
+    if DEATH_SEED[k] then
+      K.death = {}
+      for _, st in ipairs(DEATH_SEED[k]) do K.death[st] = 'seed' end
+    end
     U.kinds[k] = K
     TOT.kinds = TOT.kinds + 1
   end
   return K
 end
+
+local function ago(t) return t and string.format('%.2f', now - t) or '-' end
 
 local function unit_event(r, why)
   if r.done then return end
@@ -453,22 +541,91 @@ local function unit_event(r, why)
   end
   U.dead[r.unit] = true
   U.dead_n = U.dead_n + 1
+  if K and why == 'sm->none' then
+    -- the state held when the machine went away is the kind's death state, if it was held for most of 5 s: seen twice, learned
+    if r.dying and r.death_t then
+      K.lag_n, K.lag_sum = K.lag_n + 1, K.lag_sum + (now - r.death_t)
+    elseif r.st and r.st_t and not (K.death and K.death[r.st]) then
+      local held = now - r.st_t
+      if held >= 3.5 and held <= 8 then
+        K.term[r.st] = (K.term[r.st] or 0) + 1
+        if K.term[r.st] >= 2 then
+          K.death = K.death or {}
+          K.death[r.st] = 'learned'
+          TOT.learned = TOT.learned + 1
+          L('DEATH', 'learned kind=%s st=%s (held %.1f s when the state machine went away, seen %d times)', r.kind, r.st, held, K.term[r.st])
+        end
+      end
+    end
+  end
+  -- a kind whose units keep vanishing within seconds and never had a state machine is noise
+  if K and why == 'alive->false' and now - r.born < 3 and K.sm ~= true then
+    K.short = K.short + 1
+    if K.short >= 8 and not K.ignore then
+      K.ignore = 'auto'
+      L('IGNORE', 'kind=%s is not followed from now on: %d units gone within 3 s of being followed, none with a state machine', r.kind, K.short)
+    end
+  end
   -- the states the unit was in, each with the seconds before this event at which it entered them
   local hist = {}
   for i = 1, #r.hist do hist[i] = string.format('%.1f:%s', r.hist[i][1] - now, r.hist[i][2]) end
-  L('UNIT', 'why=%s kind=%s id=%d age=%.1f d=%s ang=%s st=%s hist=[%s] fire=%s tier=%s', why, r.kind, r.id,
+  L('UNIT', 'why=%s kind=%s id=%d age=%.1f d=%s ang=%s st=%s hist=[%s] fire=%s tier=%s dying=%s cone=%s ray=%s obj=%s', why, r.kind, r.id,
     now - r.born, r.d and string.format('%.1f', r.d) or '-', r.ang and string.format('%.1f', r.ang) or '-',
-    tostring(r.st), table.concat(hist, '|'), since_fire(), tier_of(r.kind))
+    tostring(r.st), table.concat(hist, '|'), since_fire(), tier_of(r.kind),
+    r.dying and (r.death_t and string.format('%.1f', now - r.death_t) or 'late') or '-', ago(r.cone_t), ago(r.aim_t), tostring(r.objid or '-'))
+end
+
+-- An enemy enters its death state: the kill, about five seconds before its state machine goes away. The game object of
+-- the unit is read once more by the link stage (set below), and the log says how long ago the crosshair was on it.
+local link_on_death
+local function death_event(r, st)
+  local K = U.kinds[r.kind]
+  r.dying, r.death_t = true, now
+  K.dying, TOT.dying = K.dying + 1, TOT.dying + 1
+  recent_deaths[#recent_deaths + 1] = { t = now, id = r.id, kind = r.kind }
+  if #recent_deaths > 6 then table.remove(recent_deaths, 1) end
+  L('DEATH', 'id=%d kind=%s st=%s src=%s d=%s ang=%s age=%.1f cone=%s ray=%s fire=%s tier=%s obj=%s', r.id, r.kind, st,
+    tostring(K.death[st]), r.d and string.format('%.1f', r.d) or '-', r.ang and string.format('%.1f', r.ang) or '-',
+    now - r.born, ago(r.cone_t), ago(r.aim_t), since_fire(), tier_of(r.kind), tostring(r.objid or '-'))
+  if link_on_death then safe('link', link_on_death, r) end      -- (its own stage: an error there must not stop the units stage)
+end
+
+-- the animation state of a followed unit changed (old is nil for the first state seen)
+local function state_changed(r, old, new)
+  local K = U.kinds[r.kind]
+  local death = K and K.death
+  if old == nil then
+    if death and death[new] then
+      r.dying = true                           -- on its way out when first seen: no time to give
+      K.late, TOT.late = K.late + 1, TOT.late + 1
+      L('DEATH', 'late id=%d kind=%s st=%s (in its death state when first seen)', r.id, r.kind, new)
+    end
+    return
+  end
+  if death and death[new] and not r.dying then
+    death_event(r, new)
+  elseif r.dying and not (death and death[new]) then
+    r.dying = false                            -- taken back: it left the state before the state machine went away
+    K.cancels, TOT.cancels = K.cancels + 1, TOT.cancels + 1
+    L('DEATH', 'cancel id=%d kind=%s was=%s now=%s after=%s', r.id, r.kind, tostring(old), tostring(new), ago(r.death_t))
+    r.death_t = nil
+  end
+  -- the state changes of the unit under the crosshair while I shoot: hit reactions would show here
+  if r.ang and r.ang < 12 and r.d and r.d < 120 and (fire_down or (last_fire_up and now - last_fire_up < 4)) then
+    L('STATE', 'id=%d kind=%s %s -> %s ang=%.1f d=%.1f fire=%s', r.id, r.kind:sub(1, 8), tostring(old), tostring(new), r.ang, r.d, since_fire())
+  end
 end
 
 local function track(u, k, x, y, z)
   if U.tracked[u] or U.dead[u] then return end
   U.seq = U.seq + 1
   local d, ang = aim_of(x, y, z)
+  local K = U.kinds[k]
   local r = { unit = u, kind = k, id = U.seq, born = now, x = x, y = y, z = z, d = d, ang = ang, alive = true,
-              sm = nil, st = nil, hist = {}, done = false }
+              sm = nil, st = nil, st_t = nil, hist = {}, done = false, nosm = (K ~= nil and K.sm == false) }
   U.tracked[u] = r
   U.tracked_n = U.tracked_n + 1
+  if r.nosm then U.tracked_nosm = U.tracked_nosm + 1 end
   U.order[#U.order + 1] = r
   U.spawned, TOT.spawned = U.spawned + 1, TOT.spawned + 1
 end
@@ -477,6 +634,7 @@ local function untrack(r)
   if U.tracked[r.unit] then
     U.tracked[r.unit] = nil
     U.tracked_n = U.tracked_n - 1
+    if r.nosm then U.tracked_nosm = U.tracked_nosm - 1 end
   end
   r.removed = true
 end
@@ -516,7 +674,9 @@ local function scan_step(budget)
     if k and k ~= RUNTIME_KIND then
       S.counts[k] = (S.counts[k] or 0) + 1
       local K = kind_of(k)
-      if K.mover == nil then
+      if K.ignore then
+        -- counted, nothing else asked of it
+      elseif K.mover == nil then
         -- not known yet whether this kind moves: watch up to three of its units across scans (the position of every
         -- other unit of the kind is not asked)
         if K.probe[u] or K.probe_n < 3 then
@@ -588,9 +748,13 @@ local function scan_step(budget)
     -- new units to follow: the nearest ones, up to the limit
     table.sort(S.cand, function(a, b) return a[6] < b[6] end)
     for i = 1, #S.cand do
-      if U.tracked_n >= TRACK_MAX then break end
       local c = S.cand[i]
-      track(c[1], c[2], c[3], c[4], c[5])
+      local K = U.kinds[c[2]]
+      if K and K.sm == false then
+        if U.tracked_nosm < TRACK_NOSM then track(c[1], c[2], c[3], c[4], c[5]) end
+      elseif U.tracked_n - U.tracked_nosm < TRACK_MAX then
+        track(c[1], c[2], c[3], c[4], c[5])
+      end
     end
     U.scans, TOT.scans = U.scans + 1, TOT.scans + 1
     U.scan = nil
@@ -619,6 +783,8 @@ local function sample_unit(r)
     if st ~= r.st then
       r.hist[#r.hist + 1] = { now, tostring(st) }
       if #r.hist > 4 then table.remove(r.hist, 1) end
+      state_changed(r, r.st, st)
+      r.st_t = now
     end
   end
   r.st = st
@@ -626,6 +792,7 @@ local function sample_unit(r)
   if x then
     r.x, r.y, r.z = x, y, z
     r.d, r.ang = aim_of(x, y, z)
+    if r.ang and r.ang < 6 and r.d and r.d < 150 then r.cone_t = now end
   end
   if r.sm == true and sm == false then
     r.sm = sm
@@ -672,15 +839,20 @@ local function units_step(dt)
 end
 
 -- ---------------------------------------------------------------------------------------------------------------------
--- stage 2/3: game objects (the network objects of the session). Mine: found through objects_owned_by. Fields are
--- numbered and their values are logged only when they change (a field that changes every sample is muted).
--- The enemy stage looks at other objects the same way and is OFF by default: it may end the game.
+-- stage 2: game objects (the network objects of the session). Everything that is synchronised has one: the players,
+-- the enemies (a host owns every one of them), projectiles, the mission timer ... Each is a numbered list of fields.
+-- Mine (GameSession.objects_owned_by) are all looked at, not just the oldest 40 as 0.1.0 did: an object whose field
+-- layout nobody else shares (the mission timer, a player ...) is followed one by one (OBJ lines); objects that share a
+-- layout (enemies ...) are read round robin, and a field that changes in a tenth of the reads of its layout (or in 5 of
+-- the first 6) is noise and muted for the layout (GRP lines). The numbered layouts (OBJSIG lines) and their changing fields go to the summary.
 -- ---------------------------------------------------------------------------------------------------------------------
-local O, E
+local SIGS = {}                    -- field layout text -> the layout (kept across worlds; its members are not)
+local OT = { census = 0, described = 0, samples = 0, changes = 0, gone = 0, new = 0, sigs = 0, owned_max = 0 }
+local O
 local function objects_reset()
-  O = { next = 0, sigs = {}, sig_n = 0, by_id = {}, count = 0, tracked = {}, force = false, refreshes = 0,
-        samples = 0, changes = 0, session_logged = false }
-  E = { next = 0, tracked = {}, by_id = {}, samples = 0, changes = 0, mapped = 0, force = false }
+  for _, G in pairs(SIGS) do G.n = 0 end
+  O = { next = 0, next_census = 0, by_id = {}, order = {}, cursor = 1, pending = {}, pend_i = 1, queued = {}, singles = {},
+        force = false, busy_until = 0, settled = false, owned_n = nil, session_logged = false, shown = 0, foreign = {} }
 end
 objects_reset()
 
@@ -690,57 +862,15 @@ local function signature_of(f)
   return #keys .. '|' .. table.concat(keys, ',')
 end
 
-local function fields_text(f)
-  local flat = flatten(f, {})
+local function fields_text(flat)
   local parts, n = {}, 0
-  for _, p in ipairs(sorted_keys(flat)) do
+  local keys = sorted_keys(flat)
+  for _, p in ipairs(keys) do
     n = n + 1
-    if n > 48 then parts[#parts + 1] = '+' .. (#sorted_keys(flat) - 48) .. ' more'; break end
-    parts[#parts + 1] = p .. '=' .. flat[p]
+    if n > 48 then parts[#parts + 1] = '+' .. (#keys - 48) .. ' more'; break end
+    parts[#parts + 1] = p .. '=' .. show(flat[p])
   end
   return table.concat(parts, ' ')
-end
-
--- sample one object: log what changed since the last sample. rec = { id, prev, chg, muted, sig }
-local function sample_object(tag, s, rec, extra)
-  if C('GameSession.game_object_exists', s, rec.id) ~= true then
-    if not rec.gone then rec.gone = true; L(tag, 'id=%s gone%s', tostring(rec.id), extra or '') end
-    return false
-  end
-  local f = C('GameSession.game_object_field_batched', s, rec.id, {})
-  if type(f) ~= 'table' then return false end
-  local flat = flatten(f, {})
-  if not rec.prev then
-    rec.prev = flat
-    return true
-  end
-  local changed = {}
-  for p, v in pairs(flat) do
-    if rec.prev[p] ~= v then
-      local c = (rec.chg[p] or 0) + 1
-      rec.chg[p] = c
-      -- a field that changes in more than a third of the samples (a position, a timer) is noise: mute it
-      if c >= 12 and c > 0.35 * ((rec.samples or 0) + 1) and not rec.muted[p] then
-        rec.muted[p] = true
-        L(tag, 'id=%s %s muted (changes in most samples)', tostring(rec.id), p)
-      end
-      if not rec.muted[p] then changed[#changed + 1] = p end
-    end
-  end
-  table.sort(changed)
-  rec.samples = (rec.samples or 0) + 1
-  if #changed > 0 then
-    local parts = {}
-    for i = 1, math.min(#changed, 12) do
-      local p = changed[i]
-      parts[i] = p .. ': ' .. tostring(rec.prev[p]) .. ' -> ' .. flat[p]
-    end
-    if #changed > 12 then parts[#parts + 1] = '+' .. (#changed - 12) .. ' more' end
-    L(tag, 'id=%s sig=%s%s | %s', tostring(rec.id), tostring(rec.sigid or '?'), extra or '', table.concat(parts, ' ; '))
-    O.changes = O.changes + 1
-  end
-  rec.prev = flat
-  return true
 end
 
 local function session_handles()
@@ -750,125 +880,370 @@ local function session_handles()
   return s, peer
 end
 
-local function player_step()
-  if now < O.next and not O.force then return end
-  O.next = now + OBJ_PERIOD
-  O.force = false
-  local s, peer = session_handles()
-  if not s then return end
-  O.refreshes = O.refreshes + 1
-  -- refresh the owned list about once a second and describe objects not seen before
-  if O.refreshes % 5 == 1 then
-    local owned = C('GameSession.objects_owned_by', s, peer)
-    if type(owned) == 'table' then
-      -- A host owns every enemy and projectile too. Unless the risky stage is on, only the 40 lowest ids (the ones made
-      -- first: the player's own persistent objects) are ever looked into; otherwise up to 8000, 10 new ones a second.
-      local limit = cfg.enemyobj and 8000 or 40
-      local ids = {}
-      for _, id in pairs(owned) do
-        if type(id) == 'number' then
-          ids[#ids + 1] = id
-          if #ids >= 4000 then break end
-        end
-      end
-      O.owned_n = #ids
-      table.sort(ids)
-      local live = 0                                  -- described objects that still exist (are in the owned list)
-      for i = 1, #ids do if O.by_id[ids[i]] then live = live + 1 end end
-      local fresh = 0
-      for _, id in ipairs(ids) do
-        if fresh >= 10 or live >= limit or O.count >= 8000 then break end
-        if not O.by_id[id] then
-          fresh, live = fresh + 1, live + 1
-          local rec = { id = id, prev = nil, chg = {}, muted = {}, first = now }
-          O.by_id[id] = rec
-          O.count = O.count + 1
-          if C('GameSession.game_object_exists', s, id) == true then
-            local f = C('GameSession.game_object_field_batched', s, id, {})
-            if type(f) == 'table' then
-              local sig = signature_of(f)
-              local S = O.sigs[sig]
-              if not S then
-                O.sig_n = O.sig_n + 1
-                S = { n = 0, id = O.sig_n, example = id }
-                O.sigs[sig] = S
-                L('OBJSIG', 'sig=%d first_object=%s fields=%d | %s', S.id, tostring(id), #sorted_keys(f, 160), fields_text(f))
-              end
-              S.n = S.n + 1
-              rec.sig, rec.sigid = sig, S.id
-              -- only an object that is alone with its layout will be followed, so only it keeps its values
-              if S.n == 1 then rec.prev = flatten(f, {}) end
-            end
-          end
-        end
-      end
-      if not O.session_logged then
-        O.session_logged = true
-        L('OBJ', 'owned objects: %d (peer known, session ok)', O.owned_n or 0)
-      end
-    end
-    -- follow objects whose field layout is unique among mine (the player object, its avatar, equipment ...): the
-    -- OBJ_TRACK oldest ones
-    local unique = {}
-    for _, rec in pairs(O.by_id) do
-      if rec.sig and O.sigs[rec.sig].n == 1 and not rec.gone then unique[#unique + 1] = rec end
-    end
-    table.sort(unique, function(a, b) return a.id < b.id end)
-    O.tracked = {}
-    for i = 1, math.min(#unique, OBJ_TRACK) do O.tracked[i] = unique[i] end
-  end
-  for _, rec in ipairs(O.tracked) do
-    O.samples = O.samples + 1
-    sample_object('OBJ', s, rec)
+local function object_gone(rec)
+  if rec.gone then return end
+  rec.gone = true
+  OT.gone = OT.gone + 1
+  local G = rec.G
+  if G then
+    G.n, G.gone = G.n - 1, G.gone + 1
+    if O.settled then L('GONE', 'id=%s sig=%d age=%.1f', tostring(rec.id), G.id, now - rec.first) end
   end
 end
 
--- enemy objects (risky): by the unit synchronizer for followed units, else from the most common field layouts
-local function enemyobj_step()
-  if not cfg.enemyobj then return end
-  if now < E.next and not E.force then return end
-  E.next = now + 0.25
-  E.force = false
-  local s = session_handles()
-  if not s then return end
-  if once('eobj_on') then
-    L('EOBJ', 'enemy object stage is on (it may end the game; the loader skips a call that did it twice in a row)')
+-- the layout of an object (numbered in the order they are met)
+local function note_sig(f, id, foreign)
+  local sig = signature_of(f)
+  local G = SIGS[sig]
+  if not G then
+    OT.sigs = OT.sigs + 1
+    G = { id = OT.sigs, n = 0, total = 0, gone = 0, example = id, samples = 0, reads = 0, chg = {}, gchg = {}, muted = {},
+          lines = {}, kinds = {} }
+    SIGS[sig] = G
+    L('OBJSIG', 'sig=%d first_object=%s%s fields=%d | %s', G.id, tostring(id), foreign and ' foreign=true' or '',
+      #sorted_keys(f, 160), fields_text(flatten(f, {})))
   end
-  -- refresh the followed set every 2 s
-  if not E.refreshed or now - E.refreshed >= 2 then
-    E.refreshed = now
-    local picked = {}
-    local sync = C('GameSession.unit_synchronizer', s)
-    if sync ~= nil then
-      local near = {}
-      for _, r in pairs(U.tracked) do if r.alive and r.d then near[#near + 1] = r end end
-      table.sort(near, function(a, b) return a.d < b.d end)
-      for i = 1, math.min(#near, EOBJ_TRACK) do
-        local r = near[i]
-        local id = C('UnitSynchronizer.unit_to_game_object_id', sync, r.unit)
-        if type(id) == 'number' then
-          E.mapped = E.mapped + 1
-          picked[#picked + 1] = { id = id, kind = r.kind }
+  return G
+end
+
+-- an object not looked at before: exists, fields, layout
+local function describe(s, id)
+  local rec = { id = id, first = now, chg = {}, muted = {}, samples = 0 }
+  O.by_id[id] = rec
+  OT.described = OT.described + 1
+  local there = C('GameSession.game_object_exists', s, id)
+  if there == false then rec.gone = true; return end
+  if there ~= true then rec.bad = true; return end            -- (a refusal is not an answer; never asked again)
+  local f = C('GameSession.game_object_field_batched', s, id, {})
+  if type(f) ~= 'table' then rec.bad = true; return end       -- never asked again
+  local G = note_sig(f, id, O.foreign[id])
+  G.n, G.total = G.n + 1, G.total + 1
+  rec.G, rec.prev = G, flatten(f, {})
+  O.order[#O.order + 1] = rec
+  if O.settled then
+    OT.new = OT.new + 1
+    L('NEW', 'id=%s sig=%d', tostring(id), G.id)
+  end
+end
+
+local function describe_some(s)
+  local n = 0
+  while n < DESCRIBE_MAX do
+    local id = O.pending[O.pend_i]
+    if id == nil then
+      O.pending, O.pend_i = {}, 1
+      if not O.settled and O.census_logged then
+        O.settled = true
+        local count = 0
+        for _ in pairs(O.by_id) do count = count + 1 end
+        L('OBJ', 'all %d game objects looked at once: %d field layouts so far', count, OT.sigs)
+      end
+      break
+    end
+    O.pend_i = O.pend_i + 1
+    O.queued[id] = nil
+    if not O.by_id[id] then describe(s, id); n = n + 1 end
+  end
+end
+
+-- the list of my objects, about once a second: new ones wait to be described, gone ones are noted, and the objects with
+-- a layout of their own (two members or fewer) are picked to be followed one by one
+local function census(s, peer)
+  local owned = C('GameSession.objects_owned_by', s, peer)
+  if type(owned) ~= 'table' then
+    if once('owned_failed') then L('OBJ', 'GameSession.objects_owned_by gave no list (%s)', type(owned)) end
+    return
+  end
+  local ids = {}
+  for _, id in pairs(owned) do
+    if type(id) == 'number' then ids[#ids + 1] = id end
+    if #ids >= OBJ_LIMIT then break end
+  end
+  -- other players' objects (a client sees the enemies there): only when asked for, it has ended the game for other mods
+  if cfg.remote and #ids < OBJ_LIMIT then
+    local others = C('GameSession.other_peers', s)
+    if type(others) == 'table' then
+      local nothers = 0
+      for _, p in pairs(others) do
+        nothers = nothers + 1
+        if nothers > 4 then break end
+        local theirs = C('GameSession.objects_owned_by', s, p)
+        if type(theirs) == 'table' then
+          for _, id in pairs(theirs) do
+            if type(id) == 'number' and #ids < OBJ_LIMIT then ids[#ids + 1] = id; O.foreign[id] = true end
+          end
         end
       end
-    elseif once('eobj_sync_failed') then
-      L('EOBJ', 'GameSession.unit_synchronizer gave nothing')
     end
-    local keep, kept_by_id = {}, {}
-    for _, p in ipairs(picked) do
-      local rec = E.by_id[p.id]
-      if not rec then
-        rec = { id = p.id, prev = nil, chg = {}, muted = {}, unitkind = p.kind }
-        L('EOBJ', 'follow id=%s unit_kind=%s', tostring(p.id), p.kind)
-      end
-      kept_by_id[p.id] = rec
-      keep[#keep + 1] = rec
-    end
-    E.tracked, E.by_id = keep, kept_by_id            -- objects no longer followed are forgotten, values and all
   end
-  for _, rec in ipairs(E.tracked) do
-    E.samples = E.samples + 1
-    sample_object('EOBJ', s, rec, ' unit=' .. tostring(rec.unitkind))
+  table.sort(ids)
+  OT.census = OT.census + 1
+  O.owned_n = #ids
+  if #ids > OT.owned_max then OT.owned_max = #ids end
+  if not O.census_logged then
+    O.census_logged = true
+    L('OBJ', 'game objects listed: %d (peer known, session ok)', #ids)
+  end
+  local seen = {}
+  for _, id in ipairs(ids) do seen[id] = true end
+  for id, rec in pairs(O.by_id) do
+    if not seen[id] then
+      object_gone(rec)
+      O.by_id[id] = nil
+    end
+  end
+  for i, id in ipairs(ids) do
+    if (cfg.wide or i <= OBJ_NARROW) and not O.by_id[id] and not O.queued[id] then
+      O.pending[#O.pending + 1] = id
+      O.queued[id] = true
+    end
+  end
+  -- the objects with a layout of their own: the oldest and the newest ones (a player's own objects are made late)
+  local singles = {}
+  for _, rec in pairs(O.by_id) do
+    rec.fast = false
+    if rec.G and not rec.gone and rec.G.n <= 2 then singles[#singles + 1] = rec end
+  end
+  table.sort(singles, function(a, b) return a.id < b.id end)
+  local pick, n = {}, #singles
+  if n <= OBJ_TRACK then
+    pick = singles
+  else
+    local half = math.floor(OBJ_TRACK / 2)
+    for i = 1, half do pick[#pick + 1] = singles[i] end
+    for i = n - (OBJ_TRACK - half) + 1, n do pick[#pick + 1] = singles[i] end
+  end
+  for _, rec in ipairs(pick) do rec.fast = true end
+  O.singles = pick
+end
+
+-- One object read again; the fields that changed since its last read go to the log under tag. per_object: a field that
+-- changes in most reads of this object is muted for it (the objects followed one by one); else the layout's other
+-- members count too and a field muted is muted for the layout.
+local function sample_rec(tag, s, rec, extra, per_object)
+  local there = C('GameSession.game_object_exists', s, rec.id)
+  if there == false then
+    object_gone(rec)
+    return false
+  end
+  if there ~= true then return false end                   -- (a refusal is not an answer)
+  local f = C('GameSession.game_object_field_batched', s, rec.id, {})
+  if type(f) ~= 'table' then return false end
+  local flat = flatten(f, {})
+  local prev, G = rec.prev, rec.G
+  rec.prev = flat
+  rec.samples = rec.samples + 1
+  OT.samples, G.reads = OT.samples + 1, G.reads + 1
+  if not prev then return true end
+  if not per_object then G.samples = G.samples + 1 end
+  local changed
+  for p, v in pairs(flat) do
+    if not same(prev[p], v) then
+      G.chg[p] = (G.chg[p] or 0) + 1
+      local muted
+      if per_object then
+        local c = (rec.chg[p] or 0) + 1
+        rec.chg[p] = c
+        if c >= 12 and c > 0.35 * rec.samples and not rec.muted[p] then
+          rec.muted[p] = true
+          L(tag, 'id=%s %s muted (changes in most reads)', tostring(rec.id), p)
+        end
+        muted = rec.muted[p]
+      else
+        G.gchg[p] = (G.gchg[p] or 0) + 1
+        -- noise is told from a rare change early: 5 changes in the first 6 reads of a layout, or in a tenth of the first 40
+        if not G.muted[p] and ((G.samples >= 6 and G.gchg[p] >= 5) or (G.samples >= 40 and G.gchg[p] > 0.10 * G.samples)
+                               or (G.lines[p] or 0) >= 150) then
+          G.muted[p] = true
+          L('OBJSIG', 'sig=%d field %s muted: %d changes in %d reads', G.id, p, G.gchg[p], G.samples)
+        end
+        muted = G.muted[p]
+      end
+      if not muted then
+        changed = changed or {}
+        changed[#changed + 1] = p
+        G.lines[p] = (G.lines[p] or 0) + 1
+      end
+    end
+  end
+  if changed then
+    table.sort(changed)
+    local parts = {}
+    for i = 1, math.min(#changed, 12) do
+      local p = changed[i]
+      parts[i] = p .. ': ' .. show(prev[p]) .. ' -> ' .. show(flat[p])
+    end
+    if #changed > 12 then parts[#parts + 1] = '+' .. (#changed - 12) .. ' more' end
+    L(tag, 'id=%s sig=%d%s | %s', tostring(rec.id), G.id, extra or '', table.concat(parts, ' ; '))
+    OT.changes = OT.changes + 1
+  end
+  return true
+end
+
+-- the objects that share a layout, round robin: a few per frame, more while I fire and for 3 s after a mark
+local function sweep(s)
+  local order = O.order
+  local budget = (fire_down or now < O.busy_until) and SWEEP_BUSY or SWEEP_IDLE
+  local cursor, done, looked, n = O.cursor, 0, 0, #order
+  while done < budget and looked < n do
+    if cursor > #order then cursor = 1 end
+    local rec = order[cursor]
+    if rec == nil then break end
+    looked = looked + 1
+    if rec.gone then
+      table.remove(order, cursor)
+    elseif rec.fast or (rec.aimed_until and now < rec.aimed_until) then
+      cursor = cursor + 1                              -- read one by one, not here
+    else
+      sample_rec('GRP', s, rec, nil, false)
+      done = done + 1
+      cursor = cursor + 1
+    end
+  end
+  O.cursor = cursor
+end
+
+local function count_pairs(t)
+  local n = 0
+  if type(t) == 'table' then for _ in pairs(t) do n = n + 1 end end
+  return n
+end
+
+local function player_step()
+  local s, peer = session_handles()
+  if not s then return end
+  if not O.session_logged then
+    O.session_logged = true
+    local host = C('GameSession.game_session_host', s)
+    local who = 'unknown'
+    if host == true then who = 'me' elseif host == false then who = 'someone else' elseif host ~= nil then who = (host == peer) and 'me' or 'someone else' end
+    L('SESSION', 'peer=%s host=%s (%s) peers=%d other_peers=%d | chef: is_host=%s players=%s', type(peer), who, type(host),
+      count_pairs(C('GameSession.peers', s)), count_pairs(C('GameSession.other_peers', s)),
+      tostring(chef.is_host and chef.is_host()), tostring(chef.players and chef.players()))
+  end
+  if now >= O.next_census then
+    O.next_census = now + 1.0
+    census(s, peer)
+  end
+  describe_some(s)
+  if now >= O.next or O.force then
+    O.next, O.force = now + OBJ_PERIOD, false
+    for _, rec in ipairs(O.singles) do
+      if not rec.gone then sample_rec('OBJ', s, rec, nil, true) end
+    end
+  end
+  if cfg.wide then sweep(s) end
+end
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- stage 3: the unit under the crosshair and its game object. GameSession.unit_synchronizer and the UnitSynchronizer
+-- lookups only read. The object of a unit I aim at is read four times a second while I fire, and once when the unit
+-- enters its death state; one other unit every half second is looked up as well, to learn which object layout belongs to
+-- which kind of unit. An object that is not mine is not read unless the "other players' objects" row is on.
+-- ---------------------------------------------------------------------------------------------------------------------
+local LK = { next = 0, next_census = 0, lookups = 0, found = 0, none = 0, foreign = 0, census_n = 0, sync = nil, sync_at = -100, pairs = {} }
+
+local function link_reset()
+  LK.census_n, LK.sync, LK.sync_at = 0, nil, -100
+end
+
+local function ensure_sync(s)
+  if not LK.sync or now - LK.sync_at > 5 then
+    LK.sync, LK.sync_at = C('GameSession.unit_synchronizer', s), now
+    if LK.sync == nil and once('sync_failed') then L('LINK', 'GameSession.unit_synchronizer gave nothing') end
+  end
+  return LK.sync ~= nil
+end
+
+-- the game object of a followed unit: the id the synchronizer gives, the layout it has, the layout <-> kind note
+local function link_unit(s, r)
+  r.link_tries = (r.link_tries or 0) + 1
+  if r.link_tries >= 3 then r.objid = false end        -- give up after three tries (set again below on success)
+  if not chef.unit_alive(r.unit) then return end
+  LK.lookups = LK.lookups + 1
+  local id = C('UnitSynchronizer.unit_to_game_object_id', LK.sync, r.unit)
+  if type(id) ~= 'number' then
+    LK.none = LK.none + 1
+    if LK.none <= 5 then L('LINK', 'no object for unit#%d kind=%s (%s)', r.id, r.kind:sub(1, 8), type(id)) end
+    return
+  end
+  r.objid = id
+  LK.found = LK.found + 1
+  local rec = O.by_id[id]
+  if rec and rec.G then
+    r.objrec = rec
+    local G = rec.G
+    local K = U.kinds[r.kind]
+    G.kinds[r.kind] = (G.kinds[r.kind] or 0) + 1
+    if K then K.sigs[G.id] = (K.sigs[G.id] or 0) + 1 end
+    local key = G.id .. '|' .. r.kind
+    if not LK.pairs[key] then
+      LK.pairs[key] = true
+      L('SIGKIND', 'sig=%d kind=%s tier=%s object=%s', G.id, r.kind, tier_of(r.kind), tostring(id))
+    end
+  else
+    LK.foreign = LK.foreign + 1
+    if LK.foreign <= 5 then L('LINK', 'unit#%d kind=%s has object %s, which is not in my list (not read)', r.id, r.kind:sub(1, 8), tostring(id)) end
+  end
+end
+
+local function follow_object(s, r)
+  local rec = r.objrec
+  if not rec or not rec.G or rec.gone then return end
+  rec.aimed_until = now + 1.0
+  if not rec.shown then
+    rec.shown = true
+    if O.shown < 60 then
+      O.shown = O.shown + 1
+      L('AIMOBJ', 'first look id=%s sig=%d unit#%d kind=%s | %s', tostring(rec.id), rec.G.id, r.id, r.kind:sub(1, 8),
+        fields_text(rec.prev or {}))
+    end
+  end
+  sample_rec('AIMOBJ', s, rec, string.format(' unit#%d kind=%s', r.id, r.kind:sub(1, 8)), true)
+end
+
+link_on_death = function(r)
+  if not cfg.link then return end
+  local s = session_handles()
+  if not s or not ensure_sync(s) then return end
+  if r.objid == nil then link_unit(s, r) end
+  local rec = r.objrec
+  if rec and rec.G and not rec.gone then
+    sample_rec('AIMOBJ', s, rec, string.format(' death unit#%d kind=%s', r.id, r.kind:sub(1, 8)), true)
+  end
+end
+
+local function link_step()
+  if not (cfg.link and cam) then return end
+  if now < LK.next then return end
+  LK.next = now + LINK_PERIOD
+  local s = session_handles()
+  if not s or not ensure_sync(s) then return end
+  -- the units under the crosshair: hit by the aim ray lately, or within 3 degrees
+  local aiming = fire_down or (last_fire_up and now - last_fire_up < 2.0) or now < O.busy_until
+  local c = {}
+  for _, r in pairs(U.tracked) do
+    if r.alive and not r.done and ((r.aim_t and now - r.aim_t < 0.6) or (r.ang and r.ang < 3 and r.d and r.d < 120)) then
+      c[#c + 1] = r
+    end
+  end
+  table.sort(c, function(a, b) return (a.ang or 99) < (b.ang or 99) end)
+  for i = 1, math.min(#c, LINK_NEAR) do
+    local r = c[i]
+    if r.objid == nil then link_unit(s, r) end
+    if aiming and r.objid then follow_object(s, r) end
+  end
+  -- one other unit every half second, the nearest not looked up yet
+  if now >= LK.next_census and LK.census_n < LINK_CENSUS then
+    LK.next_census = now + 0.5
+    local best
+    for _, r in pairs(U.tracked) do
+      if r.alive and not r.done and r.objid == nil and r.sm == true and r.d and (not best or r.d < best.d) then best = r end
+    end
+    if best then
+      LK.census_n = LK.census_n + 1
+      link_unit(s, best)
+    end
   end
 end
 
@@ -884,17 +1259,22 @@ local function nearest_text(n)
   local parts = {}
   for i = 1, math.min(n, #list) do
     local r = list[i]
-    parts[i] = string.format('%s#%d d=%.1f ang=%s alive=%s sm=%s st=%s', r.kind:sub(1, 8), r.id, r.d,
-      r.ang and string.format('%.1f', r.ang) or '-', tostring(r.alive), tostring(r.sm), tostring(r.st))
+    parts[i] = string.format('%s#%d d=%.1f ang=%s alive=%s sm=%s st=%s%s', r.kind:sub(1, 8), r.id, r.d,
+      r.ang and string.format('%.1f', r.ang) or '-', tostring(r.alive), tostring(r.sm), tostring(r.st), r.dying and ' DYING' or '')
   end
   return table.concat(parts, ' ; ')
 end
 
 local function mark(what)
   marks[what] = marks[what] + 1
-  emit('MARK', string.format('%s #%d fire=%s followed=%d near=[%s]', what:upper(), marks[what], since_fire(),
-    U.tracked_n, nearest_text(6)), true)
-  O.force, E.force = true, true
+  local deaths = {}
+  for _, d in ipairs(recent_deaths) do
+    if now - d.t <= 6 then deaths[#deaths + 1] = string.format('%s#%d:%.1fs', d.kind:sub(1, 8), d.id, now - d.t) end
+  end
+  emit('MARK', string.format('%s #%d fire=%s followed=%d deaths6s=[%s] near=[%s]', what:upper(), marks[what], since_fire(),
+    U.tracked_n, table.concat(deaths, ' '), nearest_text(6)), true)
+  O.force = true
+  O.busy_until = now + 3
   if chef.notify then chef.notify('PROBE MARK ' .. what:upper() .. ' ' .. marks[what], 1.2, 255, 230, 90) end
 end
 
@@ -902,6 +1282,7 @@ local function input_step()
   local down = chef.mouse_down('left') == true
   if down and not fire_down then
     fire_down, fire_since, last_fire_down = true, now, now
+    A.next = 0                                      -- (a tap lasts a tenth of a second: test the ray at once, at the moment of the shot)
     clicks = clicks + 1
     L('FIRE', 'down #%d followed=%d', clicks, U.tracked_n)
   elseif not down and fire_down then
@@ -913,23 +1294,28 @@ local function input_step()
   end
 end
 
--- aim: while the fire button is held, which followed units does the camera's ray go through (a box test)
-local A = { next = 0, samples = 0, hits = 0 }
+-- aim: while the fire button is held (and for 1.5 s after), which followed units does the camera's ray go through (a box
+-- test). A unit that is dying is left out: its body would keep the ray for the next target.
 local function aim_step()
-  if not (cfg.aim and fire_down and cam and has('ray_box')) then return end
+  if not (cfg.aim and cam and has('ray_box')) then return end
+  if not (fire_down or (last_fire_up and now - last_fire_up < 1.5)) then return end
   if now < A.next then return end
   A.next = now + 0.12
   local from = { x = cam.x, y = cam.y, z = cam.z }
   local dir = { x = cam.fx, y = cam.fy, z = cam.fz }
   local c = {}
   for _, r in pairs(U.tracked) do
-    if r.alive and not r.done and r.ang and r.ang < 10 and r.d and r.d < 160 then c[#c + 1] = r end
+    if r.alive and not r.done and not r.dying and r.ang and r.ang < 10 and r.d and r.d < 160 then c[#c + 1] = r end
   end
   table.sort(c, function(a, b) return a.ang < b.ang end)
   local hits = {}
   for i = 1, math.min(#c, 6) do
-    local dist = chef.ray_box(from, dir, c[i].unit)
-    if type(dist) == 'number' then hits[#hits + 1] = string.format('%s#%d:%.1fm@%.1f', c[i].kind:sub(1, 8), c[i].id, dist, c[i].ang) end
+    local r = c[i]
+    local dist = chef.ray_box(from, dir, r.unit)
+    if type(dist) == 'number' then
+      r.aim_t, r.aim_dist = now, dist
+      hits[#hits + 1] = string.format('%s#%d:%.1fm@%.1f', r.kind:sub(1, 8), r.id, dist, r.ang)
+    end
   end
   A.samples = A.samples + 1
   if #hits > 0 then
@@ -945,11 +1331,15 @@ local next_summary = 0
 local function summary(final)
   local lines = {}
   lines[#lines + 1] = 'BFV Chef Probe ' .. VERSION .. ' summary' .. (final and ' (final)' or '') .. ' at t=' .. string.format('%.1f', now)
-  lines[#lines + 1] = string.format('units (all worlds): scans=%d kinds=%d spawned=%d deaths=%d gone=%d bodies-skipped=%d | followed now=%d',
-    TOT.scans, TOT.kinds, TOT.spawned, TOT.deaths, TOT.gone, TOT.bodies, U.tracked_n)
-  lines[#lines + 1] = string.format('objects: refreshes=%d samples=%d changes=%d signatures=%d owned=%s', O.refreshes, O.samples, O.changes, O.sig_n, tostring(O.owned_n))
-  lines[#lines + 1] = string.format('enemy objects: on=%s samples=%d mapped=%d', tostring(cfg.enemyobj), E.samples, E.mapped)
-  lines[#lines + 1] = string.format('input: clicks=%d marks kill=%d hit=%d other=%d | aim samples=%d with-hits=%d', clicks, marks.kill, marks.hit, marks.other, A.samples, A.hits)
+  lines[#lines + 1] = string.format('units (all worlds): scans=%d kinds=%d spawned=%d lost-state-machine/alive-false=%d gone=%d bodies-skipped=%d | followed now=%d (%d without a state machine)',
+    TOT.scans, TOT.kinds, TOT.spawned, TOT.deaths, TOT.gone, TOT.bodies, U.tracked_n, U.tracked_nosm)
+  lines[#lines + 1] = string.format('death states: DEATH events=%d late=%d cancelled=%d learned=%d', TOT.dying, TOT.late, TOT.cancels, TOT.learned)
+  lines[#lines + 1] = string.format('game objects (all worlds): lists=%d looked at first=%d layouts=%d reads=%d changes logged=%d gone=%d new=%d | listed now=%s most=%d',
+    OT.census, OT.described, OT.sigs, OT.samples, OT.changes, OT.gone, OT.new, tostring(O.owned_n), OT.owned_max)
+  lines[#lines + 1] = string.format('link: lookups=%d found=%d no-object=%d not-mine=%d | aim ray tests=%d with-hits=%d', LK.lookups, LK.found, LK.none, LK.foreign, A.samples, A.hits)
+  lines[#lines + 1] = string.format('input: clicks=%d marks kill=%d hit=%d other=%d', clicks, marks.kill, marks.hit, marks.other)
+  lines[#lines + 1] = string.format('rows: units=%s player=%s wide=%s aim=%s link=%s remote=%s', tostring(cfg.units), tostring(cfg.player),
+    tostring(cfg.wide), tostring(cfg.aim), tostring(cfg.link), tostring(cfg.remote))
   lines[#lines + 1] = string.format('log: %d bytes%s', logged, capped and ' (CAP reached)' or '')
   local dropped = {}
   for tag, n in pairs(tag_dropped) do dropped[#dropped + 1] = tag .. '=' .. n end
@@ -980,7 +1370,19 @@ local function summary(final)
   for i = 1, math.min(#unknown, 60) do un[i] = string.format('%s(max %d, deaths %d)', unknown[i], KINDS[unknown[i]].max or 0, KINDS[unknown[i]].deaths) end
   lines[#lines + 1] = 'moving kinds WITHOUT a tier: ' .. (#un > 0 and table.concat(un, ' ') or 'none')
   lines[#lines + 1] = ''
-  lines[#lines + 1] = '## unit kinds seen: kind  last-count  max-count  mover  has-state-machine  deaths  gone  tier'
+  lines[#lines + 1] = '## death states: kind  DEATH-events  cancelled  late  state-machine-lost-after-DEATH(n, mean seconds)  states(source)'
+  local dk = {}
+  for k, K in pairs(KINDS) do if K.death then dk[#dk + 1] = k end end
+  table.sort(dk, function(a, b) return KINDS[a].dying > KINDS[b].dying end)
+  for _, k in ipairs(dk) do
+    local K = KINDS[k]
+    local sts = {}
+    for _, st in ipairs(sorted_keys(K.death)) do sts[#sts + 1] = st .. '(' .. K.death[st] .. ')' end
+    lines[#lines + 1] = string.format('%s %5d %5d %5d  %4d %6s  %s', k, K.dying, K.cancels, K.late, K.lag_n,
+      K.lag_n > 0 and string.format('%.2f', K.lag_sum / K.lag_n) or '-', table.concat(sts, ' '))
+  end
+  lines[#lines + 1] = ''
+  lines[#lines + 1] = '## unit kinds seen: kind  last-count  max-count  mover  has-state-machine  deaths  gone  tier  ignored  object-layouts(sig:count)'
   local kinds = {}
   for k in pairs(U.kinds) do kinds[#kinds + 1] = k end
   table.sort(kinds, function(a, b)
@@ -993,11 +1395,32 @@ local function summary(final)
     local K = U.kinds[kinds[i]]
     -- 'false*': found not to move, being looked at again right now (idle units may start walking)
     local moves = (K.mover == nil and K.static_seen) and 'false*' or tostring(K.mover)
-    lines[#lines + 1] = string.format('%s %5d %5d  %-6s %-5s  %4d %4d  %s', kinds[i], K.n or 0, K.max, moves, tostring(K.sm), K.deaths, K.gone, tier_of(kinds[i]))
+    local sg = {}
+    for _, id in ipairs(sorted_keys(K.sigs)) do sg[#sg + 1] = id .. ':' .. K.sigs[id] end
+    lines[#lines + 1] = string.format('%s %5d %5d  %-6s %-5s  %4d %4d  %-6s %-7s %s', kinds[i], K.n or 0, K.max, moves, tostring(K.sm), K.deaths, K.gone,
+      tier_of(kinds[i]), K.ignore and tostring(K.ignore) or '-', table.concat(sg, ' '))
+  end
+  lines[#lines + 1] = ''
+  lines[#lines + 1] = '## game object layouts: sig  members-now  ever  gone  reads  | fields that changed (count; m = muted)  | unit kinds tied to it (count)'
+  local sigs = {}
+  for _, G in pairs(SIGS) do sigs[#sigs + 1] = G end
+  table.sort(sigs, function(a, b) return a.id < b.id end)
+  for i = 1, math.min(#sigs, 120) do
+    local G = sigs[i]
+    local fields = {}
+    for p, c in pairs(G.chg) do fields[#fields + 1] = { p, c } end
+    table.sort(fields, function(a, b) if a[2] ~= b[2] then return a[2] > b[2] end return a[1] < b[1] end)
+    local ft = {}
+    for j = 1, math.min(#fields, 10) do ft[j] = fields[j][1] .. ':' .. fields[j][2] .. (G.muted[fields[j][1]] and 'm' or '') end
+    local kt = {}
+    for _, k in ipairs(sorted_keys(G.kinds)) do kt[#kt + 1] = k:sub(1, 8) .. ':' .. G.kinds[k] end
+    lines[#lines + 1] = string.format('sig=%d %4d %5d %4d %6d | %s | %s', G.id, G.n, G.total, G.gone, G.reads,
+      #ft > 0 and table.concat(ft, ' ') or '-', #kt > 0 and table.concat(kt, ' ') or '-')
   end
   write_file('bfv_probe_summary.txt', lines)
-  emit('SUM', string.format('scans=%d kinds=%d followed=%d deaths=%d gone=%d obj_samples=%d obj_changes=%d eobj=%d clicks=%d marks=%d/%d/%d log=%dB',
-    TOT.scans, TOT.kinds, U.tracked_n, TOT.deaths, TOT.gone, O.samples, O.changes, E.samples, clicks, marks.kill, marks.hit, marks.other, logged), true)
+  emit('SUM', string.format('scans=%d kinds=%d followed=%d deaths=%d dying=%d gone=%d objs=%s layouts=%d reads=%d changes=%d links=%d/%d clicks=%d marks=%d/%d/%d log=%dB',
+    TOT.scans, TOT.kinds, U.tracked_n, TOT.deaths, TOT.dying, TOT.gone, tostring(O.owned_n), OT.sigs, OT.samples, OT.changes, LK.found, LK.lookups,
+    clicks, marks.kill, marks.hit, marks.other, logged), true)
 end
 
 -- ---------------------------------------------------------------------------------------------------------------------
@@ -1013,10 +1436,12 @@ local function setup_menu()
     if v ~= nil then cfg[id] = v == true end
     chef.on_change(id, function(value) cfg[id] = value == true end)
   end
-  toggle('units', 'Units: census and deaths', true, 'Follow moving units near you and log when they die or vanish.', 'What to record')
+  toggle('units', 'Units: census and deaths', true, 'Follow moving units near you; log when they enter their death state, die or vanish.', 'What to record')
   toggle('player', 'My game objects: field changes', true, 'Log the network objects you own when a field changes.')
+  toggle('wide', 'All of my game objects, not just the oldest 40', true, 'Reads every game object you own (a host owns all enemies) a few per frame. Reading only; light on the CPU.')
   toggle('aim', 'Aim ray tests while firing', true, 'While the left mouse button is held, log which followed units the camera ray goes through.')
-  toggle('enemyobj', 'Enemy game objects (MAY END THE GAME)', false, 'Reads other network objects. The loader learns from a crash and skips the call, but keep it off for the first run.')
+  toggle('link', 'Unit under the crosshair <-> its game object', true, 'Looks up the game object of the unit you aim at (lookups only) and reads it while you fire. Objects of other players are not read.')
+  toggle('remote', "Other players' game objects (MAY END THE GAME)", false, "Also reads objects owned by other players. That has ended the game for other mods, the loader then skips the call. Keep it off unless asked.")
   toggle('hud', 'Show the status line', true, 'A small line at the top left with the probe counters.')
   if has('option_buttons') then
     chef.button('dump_api', 'Write the API list again', function() safe('api', dump_api, 'asked in the menu') end, 'WRITE')
@@ -1040,6 +1465,7 @@ local function new_world(id)
   world_id = id
   units_reset()
   objects_reset()
+  link_reset()
   mission_t0 = nil
   L('WORLD', 'id=%s in_mission=%s', tostring(id), tostring(chef.in_mission()))
 end
@@ -1064,8 +1490,8 @@ function M.update(dt)
   if not mission_t0 then mission_t0 = now end
   if cfg.units then safe('units', units_step, dt) end
   if cfg.player then safe('player', player_step) end
-  if cfg.enemyobj then safe('enemyobj', enemyobj_step) end
   safe('aim', aim_step)
+  safe('link', link_step)
   if now >= next_summary then
     next_summary = now + 30
     safe('summary', summary, false)
@@ -1077,8 +1503,8 @@ function M.render()
   local w, h = chef.screen()
   if not w then return end
   local px = math.max(1, math.floor(h / 720 + 0.5))
-  local text = string.format('BFV PROBE %s  FOLLOWED %d  DEATHS %d  MARKS %d  LOG %dK%s', VERSION, U.tracked_n, TOT.deaths,
-    marks.kill + marks.hit + marks.other, math.floor(logged / 1024), capped and ' FULL' or '')
+  local text = string.format('BFV PROBE %s  FOLLOWED %d  DEATHS %d  OBJECTS %s  LINKS %d  MARKS %d  LOG %dK%s', VERSION, U.tracked_n, TOT.dying,
+    tostring(O.owned_n or '-'), LK.found, marks.kill + marks.hit + marks.other, math.floor(logged / 1024), capped and ' FULL' or '')
   chef.text(12, h - 22 * px, text, px, chef.color(255, 230, 90, 255), chef.TOP + 30)
 end
 

@@ -363,16 +363,24 @@ local function dump_api(label)
   api_snapshot = snap
 end
 
+-- (chef.capabilities is a read-only proxy: pairs() over it gives nothing, so ask chef.has for each name)
+local CAP_NAMES = { 'after_startup', 'settings', 'share', 'events', 'require', 'bind', 'menu', 'shims', 'dev', 'logs',
+                    'own_log', 'units', 'spawn', 'timers', 'budget', 'session', 'settings_file', 'shapes',
+                    'sprite_sheets', 'notify', 'typed', 'key_labels', 'save_table', 'mods', 'health', 'index',
+                    'joining', 'ray_box', 'mouse_hold', 'players_event', 'hang_watchdog', 'option_buttons',
+                    'option_colors', 'option_headings', 'menu_state', 'mod_stopped_event', 'bind_combos',
+                    'option_folds' }
+
 local function banner()
   L('BANNER', 'probe=%s loader=%s %s api=%s date=%s', VERSION, tostring(chef.loader), tostring(chef.loader_version),
     tostring(chef.api), os.date('%Y-%m-%d %H:%M:%S'))
-  local caps = {}
-  if type(chef.capabilities) == 'table' then
-    for _, k in ipairs(sorted_keys(chef.capabilities)) do
-      if k ~= 'api' then caps[#caps + 1] = k .. '=' .. (chef.capabilities[k] and '1' or '0') end
-    end
+  if chef.has then
+    local caps = {}
+    for _, name in ipairs(CAP_NAMES) do caps[#caps + 1] = name .. '=' .. (has(name) and '1' or '0') end
+    L('CAPS', '%s', table.concat(caps, ' '))
+  else
+    L('CAPS', 'chef.has does not exist: a loader older than 1.0.1')
   end
-  L('CAPS', '%s', table.concat(caps, ' '))
   local w, h = chef.screen()
   local B = rawget(_G, 'CowboyBingusModLoader')
   local build = 'unknown'
@@ -557,7 +565,9 @@ local function scan_step(budget)
           if not S.probe_seen[pu] then K.probe[pu] = nil; K.probe_n = K.probe_n - 1 end
         end
         if K.moved_check then K.checks = K.checks + 1; K.moved_check = false end
-        if K.checks >= 5 and K.mover == nil then K.mover = false; K.probe = {}; K.probe_n = 0; K.recheck_at = now + 20 end
+        if K.checks >= 5 and K.mover == nil then
+          K.mover, K.static_seen, K.probe, K.probe_n, K.recheck_at = false, true, {}, 0, now + 20
+        end
       elseif K.mover == false and K.recheck_at and now >= K.recheck_at and K.rechecks < 5 and (K.n or 0) >= 2 then
         -- idle units, or probes that happened to be bodies: look again with fresh units
         K.mover, K.checks, K.rechecks, K.recheck_at = nil, 0, K.rechecks + 1, nil
@@ -981,7 +991,9 @@ local function summary(final)
   end)
   for i = 1, math.min(#kinds, 400) do
     local K = U.kinds[kinds[i]]
-    lines[#lines + 1] = string.format('%s %5d %5d  %-5s %-5s  %4d %4d  %s', kinds[i], K.n or 0, K.max, tostring(K.mover), tostring(K.sm), K.deaths, K.gone, tier_of(kinds[i]))
+    -- 'false*': found not to move, being looked at again right now (idle units may start walking)
+    local moves = (K.mover == nil and K.static_seen) and 'false*' or tostring(K.mover)
+    lines[#lines + 1] = string.format('%s %5d %5d  %-6s %-5s  %4d %4d  %s', kinds[i], K.n or 0, K.max, moves, tostring(K.sm), K.deaths, K.gone, tier_of(kinds[i]))
   end
   write_file('bfv_probe_summary.txt', lines)
   emit('SUM', string.format('scans=%d kinds=%d followed=%d deaths=%d gone=%d obj_samples=%d obj_changes=%d eobj=%d clicks=%d marks=%d/%d/%d log=%dB',

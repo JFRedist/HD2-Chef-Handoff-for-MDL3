@@ -114,6 +114,7 @@ check(#log > 50, 'the probe wrote its own log (' .. #log .. ' lines)')
 check(S.crashed == nil, 'no call would have ended the game: ' .. tostring(S.crashed))
 check(count(log, ' ERR ') == 0, 'no ERR lines in the log')
 check(count(log, 'BANNER probe=') == 1 and count(log, ' CAPS ') == 1 and count(log, ' ENV ') == 1, 'banner, capabilities and environment lines')
+check(first(log, ' CAPS after_startup=1 ') and first(log, ' ray_box=1 ') and first(log, ' option_folds=1$'), 'the capability line lists every capability by asking chef.has (capabilities itself is a read-only proxy)')
 check(count(log, ' WORLD id=') >= 3, 'every world change is logged (' .. count(log, ' WORLD id=') .. ')')
 check(count(log, 'MISSION start') == 2 and count(log, 'MISSION end') == 2, 'mission start/end events are logged')
 
@@ -169,6 +170,7 @@ check(first(log, ' EOBJ id=1%d%d%d sig=%?.*| 1: 100 %-> 60'), 'an enemy object h
 check(count(log, ' EOBJ ') < 200, 'the risky stage logs a bounded amount')
 
 check(sum and sum:find('## unit kinds seen', 1, true) and sum:find(PROP .. '%s+%d+%s+%d+%s+false'), 'the summary lists props as not moving')
+check(sum and not sum:find(PROP .. '%s+%d+%s+%d+%s+nil'), 'a prop kind that is being looked at again is not shown as unknown (false* or false)')
 local a_deaths = sum and tonumber(sum:match(BUG_A .. '%s+%d+%s+%d+%s+true%s+true%s+(%d+)'))
 check(a_deaths and a_deaths >= 2, 'the summary keeps the deaths per kind across worlds (' .. tostring(a_deaths) .. ')')
 check(sum and sum:find('units (all worlds):', 1, true), 'the summary counts all worlds together')

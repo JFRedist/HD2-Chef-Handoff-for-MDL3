@@ -146,18 +146,21 @@ function H.new(opts)
   -- ---------------------------------------------------------------- the fake chef
   local chef = { loader = 'Chef Shared Loader', loader_version = '1.4.1', api = 3, name = 'mods/jfredist/bfv_chef_probe',
                  options = {}, TOP = 1000, log_directory = S.dir, log_file = S.dir .. '/chef_loader.log' }
-  chef.capabilities = { api = 3 }
+  local capmap = { api = 3 }
   local caps = { 'after_startup', 'settings', 'share', 'events', 'require', 'bind', 'menu', 'shims', 'dev', 'logs',
                  'own_log', 'units', 'spawn', 'timers', 'budget', 'session', 'settings_file', 'shapes', 'sprite_sheets',
                  'notify', 'typed', 'key_labels', 'save_table', 'mods', 'health', 'index', 'joining', 'ray_box',
                  'mouse_hold', 'players_event', 'hang_watchdog', 'option_buttons', 'option_colors', 'option_headings',
                  'menu_state', 'mod_stopped_event', 'bind_combos', 'option_folds' }
-  for _, c in ipairs(caps) do chef.capabilities[c] = true end
+  for _, c in ipairs(caps) do capmap[c] = true end
+  -- like the real loader's: a read-only proxy, so pairs() over it gives nothing (a probe must ask chef.has by name)
+  chef.capabilities = setmetatable({}, { __index = capmap, __newindex = function() error('capabilities are read-only') end,
+                                         __metatable = 'locked' })
   if opts.old_loader then
     -- loader 1.0.0 style: no chef.has, no events, no own log, no bindings, no menu
     chef.capabilities = nil
   else
-    function chef.has(name) return chef.capabilities[name] == true end
+    function chef.has(name) return capmap[name] == true end
     function chef.own_log(name) S.log_name = name; S.logs[name] = S.logs[name] or {}; return true end
     function chef.after_startup(fn) S.after_startup = S.after_startup or {}; table.insert(S.after_startup, fn) end
     function chef.on(event, fn) S.listeners = S.listeners or {}; S.listeners[event] = S.listeners[event] or {}

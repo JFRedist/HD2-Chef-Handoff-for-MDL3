@@ -1,0 +1,10 @@
+{
+  "name": "Stand-in MDL3 c",
+  "version": "0.0.1",
+  "guid": "00000000-0000-4000-8000-00000000000c",
+  "description": "test fixture",
+  "lua": [
+    { "resource": "boot", "file": "mdl3_boot_c.lua" },
+    { "resource": "mods/jfredist/chef_handoff", "file": "../../../handoff/chef_handoff.lua" }
+  ]
+}

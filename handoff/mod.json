@@ -1,0 +1,9 @@
+{
+  "name": "Chef Hand-off for MDL3",
+  "version": "0.1.0",
+  "guid": "3c0512c0-3e53-40f2-8dd1-767886ab1586",
+  "description": "Lets Chef Shared Loader (and the mods made for it, such as HUDdle) run next to MDL3. With MDL3 above Chef the game runs MDL3's boot and Chef never starts; this addon, started by MDL3, hands the game to Chef a few seconds after the game starts (the hand-off in Chef's own documentation, 'For other loaders'). Does nothing when Chef is not installed or already running. Writes chef_handoff.log into %APPDATA%\\Arrowhead\\Helldivers2. Needs MDL3 and Chef Shared Loader 1.2.0 or newer, with MDL3 deployed ABOVE Chef.",
+  "lua": [
+    { "resource": "mods/jfredist/chef_handoff", "file": "chef_handoff.lua" }
+  ]
+}

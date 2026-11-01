@@ -156,6 +156,21 @@ class PackTests(unittest.TestCase):
                 self.assertEqual(src, f.read())
 
 
+    def test_the_handoff_package_builds(self):
+        with tempfile.TemporaryDirectory() as td:
+            zpath = pack.build(os.path.join(ROOT, 'handoff', 'mod.json'), td)
+            with zipfile.ZipFile(zpath) as z:
+                z.extractall(os.path.join(td, 'x'))
+            _, entries = hp.read_archive(os.path.join(td, 'x', 'core', hp.PATCH_NAME))
+            self.assertEqual(entries[0]['fid'], hp.resource_hash('mods/jfredist/chef_handoff'))
+            src = hp.lua_source(entries[0]['data'])
+            # no HD2-Requires line: it must be started by MDL3's loader, which would skip a mod that asks for Chef
+            self.assertTrue(src.startswith(b'-- HD2-Addon: mods/jfredist/chef_handoff\n'))
+            self.assertNotIn(b'HD2-Requires', src.split(b'\nlocal ', 1)[0])
+            with open(os.path.join(ROOT, 'handoff', 'chef_handoff.lua'), 'rb') as f:
+                self.assertEqual(src, f.read())
+
+
 @unittest.skipUnless(os.environ.get('HD2_FIXTURE_PATCHES'), 'set HD2_FIXTURE_PATCHES to Lua-only patch files')
 class FixtureTests(unittest.TestCase):
     def test_rebuild_byte_for_byte(self):

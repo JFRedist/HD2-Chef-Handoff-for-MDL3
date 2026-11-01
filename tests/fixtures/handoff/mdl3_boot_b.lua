@@ -1,0 +1,20 @@
+-- The same stand-in, but it starts its addons while the boot runs (before the game calls init), and it tries every
+-- addon it finds with a plain require first, the way a loader that scans the patches for HD2-Addon headers would
+-- (the stand-in Chef addon has `HD2-Requires: chef-shared-loader`, which a loader may or may not honour: this one does not).
+rawset(_G, 'CowboyBingusModLoader', { version = 21, api = 1, revision = 'stand-in-mdl3', modules = {}, game = { build_identifier = 'sim' },
+  open_log = function() return { write = function() end, close = function() end } end })
+local function start(name)
+  local L = rawget(_G, 'CowboyBingusModLoader')
+  L.modules[name] = 'loading'
+  local ok, err = pcall(require, name)
+  L.modules[name] = ok and 'loaded' or ('load failed: ' .. tostring(err))
+  print('[stand-in mdl3] ' .. name .. ' -> ' .. L.modules[name])
+end
+local updates = 0
+function init() print('[stand-in mdl3] init'); INIT_RAN = true end
+function update(dt) updates = updates + 1 end
+function render() end
+function shutdown() print('[stand-in mdl3] shutdown; updates seen: ' .. updates) end
+start('mods/jfredist/handoff_standin')
+start('mods/jfredist/chef_handoff')
+print('[stand-in mdl3] boot done; init ran yet? ' .. tostring(rawget(_G, 'INIT_RAN')))

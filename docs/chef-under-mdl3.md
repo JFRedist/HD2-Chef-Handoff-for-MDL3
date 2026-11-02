@@ -14,7 +14,7 @@ BF5 反馈的 MDL3 版需要 MDL3（它的 manifest：*"MDL3 is required as a pr
 - *"Another mod loader's `boot` (one that reads the patches for mods itself, such as Boot Mod Loader or Bingus Shared Loader v21) is not run: it would start every mod a second time."*
 
 BF5 的 MDL3 版自己的代码也表明 MDL3 是这一类加载器：它读 `CowboyBingusModLoader`（Bingus / Boot Mod Loader 的接口）、
-包住全局 `update`，头一行是 `-- HD2-Addon: mods/test_author/battlefield5_kill_feedback`。所以 Chef 在上面，MDL3 不运行；MDL3 在上面，Chef 不运行。
+包住全局 `update`，头一行是 `-- HD2-Addon: mods/test_author/battlefield5_kill_feedback`。所以 Chef 的优先级高，MDL3 不运行；MDL3 的优先级高，Chef 不运行。（"高"指部署顺序里靠后、赢得 `boot` 的那一边；Arsenal 里是列表的上端还是下端，取决于它的 First / Last mod highest priority 设置。）
 
 ## 做法：从 MDL3 这边把游戏交给 Chef
 

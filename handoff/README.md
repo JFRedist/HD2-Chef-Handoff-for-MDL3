@@ -6,8 +6,8 @@
 
 游戏只运行一个 `boot`：优先级最高的那个补丁里的。Chef 和 MDL3 都想当这个 boot，所以：
 
-- Chef 在上面：只有 Chef 运行，Chef 不会运行别的加载器的 boot（它的文档写明了），MDL3 和它的 mod 不工作。
-- MDL3 在上面：只有 MDL3 运行，Chef 和 HUDdle 不工作。
+- Chef 的优先级高：只有 Chef 运行，Chef 不会运行别的加载器的 boot（它的文档写明了），MDL3 和它的 mod 不工作。
+- MDL3 的优先级高：只有 MDL3 运行，Chef 和 HUDdle 不工作。
 
 Chef 的文档（"For other loaders"）给其它加载器留了一个交接办法：设一个便条，再 `require` Chef 的核心，Chef 就在当前的游戏里启动。
 这个 mod 在 MDL3 那一边做这件事：进游戏 6 秒后把游戏交给 Chef。之后 MDL3 照常运行它的 mod，Chef 运行它的 mod（HUDdle 之类）。
@@ -17,9 +17,16 @@ Chef 的文档（"For other loaders"）给其它加载器留了一个交接办�
 
 1. 你已经有：MDL3 和它的 mod（BF5 反馈）、Chef Shared Loader（1.2.0 以上）、HUDdle。
 2. 把 `dist/Chef-Hand-off-for-MDL3-0.1.0.zip` 加进 Arsenal / HD2 Mod Manager 并启用。
-3. **优先级：MDL3 必须在 Chef 上面**（比 Chef 后部署）。其余的顺序没关系。（Chef 和 HUDdle 的说明都要求 Chef 排最后，这里正相反：游戏运行的 boot 必须是 MDL3 的。）
+3. **优先级：MDL3 的优先级要比 Chef 高**（说的是优先级，不是"先加载"：优先级高的那个启动器，游戏才会运行它）。其余 mod 的顺序没关系。
+   Chef 和 HUDdle 的说明都要求 Chef 的优先级最高，这里正相反：游戏运行的 boot 必须是 MDL3 的。
+   在 Arsenal 里怎么摆，看它的设置：
+   - **First mod highest priority**（第一个优先级最高）：列表越靠上优先级越高，MDL3 放在 Chef **上面**。
+   - **Last mod highest priority**（最后一个优先级最高）：列表越靠下优先级越高，MDL3 放在 Chef **下面**。
+   - 拿不准的话：你原来把 Chef 放在"最高优先级"的那个位置；现在把 MDL3 放到那个位置，Chef 挪到它旁边的一格。
 4. **Purge**，再 **Deploy**。
 5. 启动游戏，在标题画面停 10 秒以上，再进一局任务。
+
+运行起来的顺序其实是：MDL3 先运行（游戏运行的是它的 boot），它启动本 mod，6 秒后本 mod 再启动 Chef。这是结果，不是你要在 Arsenal 里摆出来的东西。
 
 ## 怎么知道成功了
 
@@ -28,6 +35,14 @@ Chef 的文档（"For other loaders"）给其它加载器留了一个交接办�
 | `%APPDATA%\Arrowhead\Helldivers2\chef_handoff.log` | 最后一行是 `Chef Shared Loader 1.4.x started` |
 | `chef_loader.log`（同一个文件夹） | 有 `started by MDL3 chef_handoff 0.1.0, which handed off to me`，和 `started mods/rosensterner/minimal_hud` |
 | 游戏里 | 任务中出现 HUDdle 的 HUD；按 F9 出 Chef 的菜单；BF5 反馈照常 |
+
+## 不看日志，先看哪个不工作
+
+| 现象 | 多半是 |
+|---|---|
+| BF5 反馈（MDL3）正常，HUDdle 没有 | MDL3 的优先级是对的，交接没成功：看 `chef_handoff.log` |
+| HUDdle 正常，BF5 反馈（MDL3）没有 | Chef 的优先级还是高的（顺序摆反了）：把 MDL3 放到更高优先级，Purge 再 Deploy |
+| 两个都没有 | 看 `chef_handoff.log` 和 `chef_loader.log` |
 
 ## 日志里的状态
 

@@ -14,7 +14,7 @@ MDL3 照常运行它的 mod，Chef 运行 HUDdle 和别的 Chef mod。原理、�
 
 **要做的事：**
 
-1. 按 [`handoff/README.md`](handoff/README.md) 安装 [`dist/Chef-Hand-off-for-MDL3-0.1.0.zip`](dist/Chef-Hand-off-for-MDL3-0.1.0.zip)，**MDL3 排在 Chef 上面**，Purge 再 Deploy。
+1. 按 [`handoff/README.md`](handoff/README.md) 安装 [`dist/Chef-Hand-off-for-MDL3-0.1.0.zip`](dist/Chef-Hand-off-for-MDL3-0.1.0.zip)，**MDL3 的优先级要比 Chef 高**（Arsenal 里怎么摆看它的 First / Last mod highest priority 设置，说明里有），Purge 再 Deploy。
 2. 启动游戏，在标题画面停 10 秒，进一局任务看 HUDdle。
 3. 不管成不成，把 `%APPDATA%\Arrowhead\Helldivers2\` 里的 `chef_handoff.log` 和 `chef_loader.log` 发回来。
 

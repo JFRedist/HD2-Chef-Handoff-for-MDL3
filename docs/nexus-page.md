@@ -1,4 +1,4 @@
-# Nexus Mods 页面文字（Chef Hand-off for MDL3 0.2.0）
+# Nexus Mods 页面文字（Chef Hand-off for MDL3 0.2.1）
 
 上传页的每一栏分别复制下面的代码块。正文是 BBCode（Nexus 的描述框用的格式），英文为主，简体中文放在页尾的折叠块里。
 发布前先看最后的"发布前检查"：有几项只能你在上传页上选，我替不了。
@@ -42,10 +42,13 @@ It is a tiny addon that MDL3 starts like any other addon. About 6 seconds into t
 [size=4][b]New in 0.2.0: Chef mods that MDL3 "started" without Chef[/b][/size]
 MDL3 starts every addon that has an [i]HD2-Addon[/i] header, Chef's mods too, but without Chef. Some of them (Treasure Radar) do not fail at that point, so Chef thinks another loader already started them and skips them. Before the hand-off, 0.2.0 now reads the game's patch files, recognises the addons made for Chef and takes them off [i]package.loaded[/i], so Chef starts them properly.
 
+[size=4][b]New in 0.2.1: works with Chef Shared Loader 1.5.x[/b][/size]
+When Chef is handed the game it also takes over the game's callbacks (the update, render and shutdown chains of MDL3 and its mods) and runs them itself. From Chef 1.5.0 those callbacks sit under Chef's hang watchdog: one call that runs for more than 3 seconds counts as a hang, and the whole chain is switched off, MDL3 with it. 0.2.1 does not give Chef those callbacks to keep: they are taken off while Chef loads and put back behind Chef's own, so Chef never times or stops MDL3. If you use Chef 1.5.x, use 0.2.1 or later. (Checked with Chef 1.5.1 in Chef's own simulator, not yet in the game, so please tell me how it goes.)
+
 [size=4][b]Requirements[/b][/size]
 [list]
 [*][b]MDL3[/b], with the MDL3 mods you like (for example [url=https://www.nexusmods.com/helldivers2/mods/16927]BF5 Hit and Kill Feedback, MDL3 build[/url])
-[*][b]Chef Shared Loader 1.2.0 or newer[/b] (1.4.1 tested): [url=https://github.com/Th3chef/Chef-Shared-Loader/releases/latest]download[/url]
+[*][b]Chef Shared Loader 1.2.0 or newer[/b] (1.4.1 tested in the game; Chef 1.5.x needs this mod's 0.2.1 or later): [url=https://github.com/Th3chef/Chef-Shared-Loader/releases/latest]download[/url]
 [*]The Chef mods you want, for example [url=https://www.nexusmods.com/helldivers2/mods/18108]HUDdle[/url] or [url=https://www.nexusmods.com/helldivers2/mods/18265]Treasure Radar[/url]
 [*]A mod manager that installs Helldivers 2 patch zips (Arsenal or HD2 Mod Manager)
 [/list]
@@ -53,7 +56,7 @@ MDL3 starts every addon that has an [i]HD2-Addon[/i] header, Chef's mods too, bu
 [size=4][b]Installation[/b][/size]
 [list=1]
 [*]Install MDL3, Chef Shared Loader and your mods as usual.
-[*]Add [b]Chef-Hand-off-for-MDL3-0.2.0.zip[/b] to your mod manager and enable it.
+[*]Add [b]Chef-Hand-off-for-MDL3-0.2.1.zip[/b] to your mod manager and enable it.
 [*][b]Give MDL3 a higher priority than Chef.[/b] This is the opposite of what the Chef and HUDdle instructions say (they want Chef on top): the game has to run MDL3's boot. In Arsenal, if the setting is [i]First mod highest priority[/i], put MDL3 [b]above[/b] Chef in the list; if it is [i]Last mod highest priority[/i], put MDL3 [b]below[/b] Chef. If you are unsure: put MDL3 where Chef used to be and Chef right next to it. The order of all other mods does not matter.
 [*]Purge, then Deploy.
 [*]Start the game, wait about 10 seconds at the title screen, then start a mission.
@@ -62,7 +65,7 @@ MDL3 starts every addon that has an [i]HD2-Addon[/i] header, Chef's mods too, bu
 [size=4][b]How to tell it works[/b][/size]
 [list]
 [*]In [i]%APPDATA%\Arrowhead\Helldivers2\chef_handoff.log[/i] the last line reads [i]Chef Shared Loader 1.4.x started[/i] (about 6 seconds after launch). Before it you see lines like [i]patch files read: 91 (4 addons, 2 made for Chef, 0 read errors)[/i].
-[*][i]chef_loader.log[/i] (same folder) contains [i]started by MDL3 chef_handoff 0.2.0, which handed off to me[/i].
+[*][i]chef_loader.log[/i] (same folder) contains [i]started by MDL3 chef_handoff 0.2.1, which handed off to me[/i].
 [*]In game: the HUDdle HUD in missions, Chef's menu on F9, and your MDL3 mods working as before.
 [/list]
 
@@ -71,18 +74,20 @@ MDL3 starts every addon that has an [i]HD2-Addon[/i] header, Chef's mods too, bu
 [*][b]MDL3 mods work, Chef mods do not:[/b] the hand-off did not start Chef. Read chef_handoff.log. "Chef Shared Loader is not installed" means Chef's patch is not deployed or is disabled.
 [*][b]Chef mods work, MDL3 mods do not (and there is no chef_handoff.log):[/b] Chef still has the higher priority. Swap them, Purge, Deploy.
 [*][b]A Chef mod does not start and chef_loader.log says "already started by another loader (started), not started again":[/b] 0.2.0 only recognises Chef addons that have a line starting with "local chef = ..." or a "-- HD2-Requires: chef-shared-loader" header. Tell me which mod it is.
+[*][b]Chef 1.5.x, and chef_loader.log says "switched off boot:... for this session: it hung":[/b] you are on 0.2.0. Chef judged MDL3's callbacks to be hung and stopped them. Update to 0.2.1 or later.
 [*][b]"the last launch ended during the hand-off":[/b] the previous launch ended while handing off, so it was not tried again, to avoid a crash loop. Delete chef_handoff_state.txt to try again.
 [/list]
 
 [size=4][b]Known issues[/b][/size]
 [list]
 [*]With 0.1.0 the game closed once when I pressed ESC to return to the ship in the middle of a mission. I could not reproduce it (not with 0.2.0 either) and I do not know the cause. If it happens to you, copy MDL.log before you restart the game and send it with chef_handoff.log and chef_loader.log.
-[*]MDL3's own log lists HUDdle as "enable failed". That is MDL3's view (it gives addons its own context, not Chef's); Chef is the one running HUDdle.
+[*]MDL3's own menu and log show Chef mods such as HUDdle as failed or with an error ("enable failed"). That is MDL3's view (it gives addons its own context, not Chef's); Chef is the one running them, and they work in game.
+[*]0.2.1 with Chef 1.5.x is verified in Chef's own simulator only, not yet in the game. If it does not work for you, please send chef_handoff.log, chef_loader.log and MDL.log.
 [*]Tested only with MDL3 3.0.0-dev.29, a preview build. A different MDL3 version may start addons differently.
 [/list]
 
 [size=4][b]Tested with[/b][/size]
-MDL3 3.0.0-dev.29, Chef Shared Loader 1.4.1, HUDdle 0.6.11, Treasure Radar 0.7.1n, BF5 Hit and Kill Feedback (MDL3 build) 2.0.1.
+MDL3 3.0.0-dev.29, Chef Shared Loader 1.4.1, HUDdle 0.6.11, Treasure Radar 0.7.1n, BF5 Hit and Kill Feedback (MDL3 build) 2.0.1. Chef 1.5.1 with 0.2.1: Chef's simulator only.
 
 [size=4][b]Good to know[/b][/size]
 [list]
@@ -101,7 +106,7 @@ MDL3 3.0.0-dev.29, Chef Shared Loader 1.4.1, HUDdle 0.6.11, Treasure Radar 0.7.1
 [spoiler][b]Technical details[/b]
 The game's patch files (data/9ba626afa44a3aa3.patch_N) are read directly, the same way Chef reads them. Only Lua resources between 16 bytes and 4 MB are looked at, and only their first 16 KB, in patches with at most 4096 entries (bigger ones are built game data).
 An addon is a Lua resource that starts with a "-- HD2-Addon: mods/author/name" header. It counts as made for Chef if it has a line that starts with "local chef = ..." (Chef hands its helper table to each addon as the chunk argument) or a "-- HD2-Requires: chef-shared-loader" header line. Mentions in comments do not count.
-Those names are taken off package.loaded (and marked as not running in a Bingus-style loader's modules table, if it has one). Then the hand-off is made: the note ChefSharedLoaderHandoff = { from = ..., phase = 'init' } is set and Chef's core (mods/chef_shared_loader/core_1) is required.
+Those names are taken off package.loaded (and marked as not running in a Bingus-style loader's modules table, if it has one). The game's init, update, render and shutdown globals are taken off, so that Chef finds no callbacks to keep (from 1.5.0 it would run them under its hang watchdog), and put back behind Chef's own once it has loaded. The hand-off itself: the note ChefSharedLoaderHandoff = { from = ..., phase = 'init' } is set and Chef's core (mods/chef_shared_loader/core_1) is required.
 If the patch files cannot be read, a built-in list (Treasure Radar, HUDdle) is used.
 A Chef mod that has neither marker is not recognised.
 [/spoiler]
@@ -110,15 +115,16 @@ A Chef mod that has neither marker is not recognised.
 [b]解决什么问题：[/b]游戏只运行优先级最高的补丁里的 boot。Chef Shared Loader 和 MDL3 都想当这个 boot，所以默认只能有一个工作：Chef 在上，HUDdle、Treasure Radar 等 Chef mod 能用，MDL3 和它的 mod（比如 BF5 击杀反馈的 MDL3 版）不能用；MDL3 在上则相反。
 [b]它做什么：[/b]这是一个由 MDL3 启动的小 addon，进游戏约 6 秒后，按 Chef 文档里写明的交接办法把游戏交给真正的 Chef。之后 MDL3 照常运行它的 mod，Chef 运行 Chef 的 mod。不包含也不修改 Chef、HUDdle、MDL3 的任何文件；没装 Chef 或 Chef 已在运行时什么也不做。
 [b]0.2.0 新增：[/b]MDL3 会把 Chef 的 mod 也"启动"一遍（给的不是 Chef）。没报错的（Treasure Radar）会被 Chef 当作已经被别的加载器启动而跳过。现在交接前先读游戏的补丁文件，认出做给 Chef 的 addon，把它们从 package.loaded 里摘掉，Chef 就会正常启动它们。
-[b]需要：[/b]MDL3；Chef Shared Loader 1.2.0 以上（测试用 1.4.1）；Arsenal 或 HD2 Mod Manager。
+[b]0.2.1 新增：[/b]和 Chef 1.5.x 一起用。Chef 1.5.0 起会把交接来的游戏回调（MDL3 和它的 mod 的 update、render、shutdown 链）放在它的卡死看门狗下面，一次调用超过 3 秒就判卡死、整条链被关掉，MDL3 也就停了。0.2.1 不再把这些回调交给 Chef 保管：Chef 加载期间先摘下，加载完放回它自己的回调后面。用 Chef 1.5.x 请用 0.2.1 或更新的版本（目前只在 Chef 自带的模拟器里用 1.5.1 验证过，真机还没确认）。
+[b]需要：[/b]MDL3；Chef Shared Loader 1.2.0 以上（真机测试用 1.4.1，1.5.x 请用 0.2.1 以上）；Arsenal 或 HD2 Mod Manager。
 [b]安装：[/b]
 1. 照常安装 MDL3、Chef 和你要用的 mod。
-2. 把 Chef-Hand-off-for-MDL3-0.2.0.zip 加进 Arsenal / HD2 Mod Manager 并启用。
+2. 把 Chef-Hand-off-for-MDL3-0.2.1.zip 加进 Arsenal / HD2 Mod Manager 并启用。
 3. [b]MDL3 的优先级要比 Chef 高[/b]（这和 Chef、HUDdle 的说明相反）。Arsenal 的设置是 First mod highest priority，就把 MDL3 放在 Chef 上面；是 Last mod highest priority，就放在下面。拿不准：把 MDL3 放到你原来放 Chef 的位置，Chef 挪到它旁边。其余 mod 的顺序没关系。
 4. Purge，再 Deploy。启动游戏，在标题画面停 10 秒以上，再进一局任务。
-[b]怎么知道成功了：[/b]%APPDATA%\Arrowhead\Helldivers2\chef_handoff.log 最后一行是 Chef Shared Loader 1.4.x started；chef_loader.log 里有 started by MDL3 chef_handoff 0.2.0, which handed off to me；任务中出现 HUDdle，按 F9 出 Chef 的菜单，MDL3 的 mod 照常。
+[b]怎么知道成功了：[/b]%APPDATA%\Arrowhead\Helldivers2\chef_handoff.log 最后一行是 Chef Shared Loader 1.4.x started；chef_loader.log 里有 started by MDL3 chef_handoff 0.2.1, which handed off to me；任务中出现 HUDdle，按 F9 出 Chef 的菜单，MDL3 的 mod 照常。
 [b]出问题时：[/b]MDL3 的 mod 正常、Chef 的 mod 没有：看 chef_handoff.log。Chef 的 mod 正常、MDL3 的 mod 没有（也没有 chef_handoff.log）：Chef 的优先级还是高的，对调后 Purge 再 Deploy。反馈时请附上 chef_handoff.log、chef_loader.log 和 MDL.log（MDL.log 每次启动会被覆盖，闪退后先拷出来再重开游戏）。
-[b]已知问题：[/b]0.1.0 下任务中按 ESC 回飞船闪退过一次，原因没找到，之后没有再出现。只在 MDL3 3.0.0-dev.29（预览版）上测过。
+[b]已知问题：[/b]0.1.0 下任务中按 ESC 回飞船闪退过一次，原因没找到，之后没有再出现。只在 MDL3 3.0.0-dev.29（预览版）上测过。Chef 的 mod 在 MDL3 的菜单里会显示错误，实际能正常运行。0.2.1 + Chef 1.5.x 只在模拟器里验证过。
 [b]来源：[/b]代码、文档和问题反馈在 GitHub（MIT 许可）。代码是在 Claude（Anthropic 的 AI）的帮助下写的，由我在真实游戏里测试。
 [/spoiler]
 ```
@@ -127,18 +133,26 @@ A Chef mod that has neither marker is not recognised.
 
 | 栏 | 内容 |
 |---|---|
-| 文件 | `Chef-Hand-off-for-MDL3-0.2.0.zip`（GitHub 的 Release 页下载；sha256 `c34ce4a186c33a82aaf8ce64e5e7e7d4ef6126c415ec8c732e80c58416e14dcb`） |
+| 文件 | `Chef-Hand-off-for-MDL3-0.2.1.zip`（GitHub 的 Release 页下载；sha256 `055bcdf7ab5b21fea6abaeb2d7628bb067aa4a263cf6e537f4f5143ec1842822`） |
 | 名称 | `Chef Hand-off for MDL3` |
-| 版本 | `0.2.0` |
+| 版本 | `0.2.1` |
 | 类型 | Main file |
 
 文件说明：
 
 ```
-Mod manager zip (Arsenal / HD2 Mod Manager). Needs MDL3 and Chef Shared Loader 1.2.0+. MDL3 must have a higher priority than Chef.
+Mod manager zip (Arsenal / HD2 Mod Manager). Needs MDL3 and Chef Shared Loader 1.2.0+ (works with 1.5.x from 0.2.1). MDL3 must have a higher priority than Chef.
 ```
 
-## 更新说明（Changelog，0.2.0）
+## 更新说明（Changelog）
+
+0.2.1（新的这一版）：
+
+```
+Works with Chef Shared Loader 1.5.x. Chef 1.5 runs the callbacks it is handed under its hang watchdog and would switch MDL3 off after one call over 3 s; the game's callbacks are now kept out of Chef's hands and put back behind Chef's own. The log also records the debug hook state and any call of MDL3's chain over 0.5 s. (Checked with Chef 1.5.1 in Chef's simulator, not yet in the game.)
+```
+
+0.2.0（如果已经上架过，这是上一版的说明）：
 
 ```
 First public release. Chef mods that MDL3 starts without Chef (Treasure Radar) are no longer skipped by Chef: before the hand-off, the addons made for Chef are recognised by reading the patch files and taken off package.loaded.
@@ -146,6 +160,7 @@ First public release. Chef mods that MDL3 starts without Chef (Treasure Radar) a
 
 ## 发布前检查
 
+0. **已经上架过 0.2.0 的话**：把 0.2.1 作为新版本上传（同一个 mod 页面，新文件），并在页面上置顶一条说明：用 Chef 1.5.x 请用 0.2.1。0.2.0 的文件可以留着给 Chef 1.4.x 用户，也可以归档。
 1. **AI 标签。** Nexus 要求给 AI 生成的内容打标签。我这里打不开 Nexus，只从搜索摘要看到：有一个 *AI-Generated Content* 标签（摘要里写的范围包括代码），和一个 *AI Assisted* 标签（AI 只有有限参与时用）；没打标签可能被处理。这个 mod 的代码是我写的，所以请在上传页选 *AI-Generated Content*，具体选项以页面上的原文为准。描述末尾的那句 Claude 的说明请保留。
 2. **要求（Requirements）栏。** 把 MDL3 的页面加进去；Chef Shared Loader 如果在 Nexus 上也有页面就一起加。我没找到它们的 Nexus 链接，所以描述里 MDL3 没有链接，Chef 的链接指向它的 GitHub Release（它的 README 里写的下载地方）。
    描述里其余的 Nexus 链接：HUDdle（18108）和 BF5 的 MDL3 版（16927）的编号是你给我的；Treasure Radar 的编号 18265 是我从你 Arsenal 里它的文件夹名（`Treasure Radar 18265 0.7.1n …`）取的，我打不开 Nexus，发布前请点一下确认。

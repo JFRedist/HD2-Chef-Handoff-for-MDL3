@@ -12,10 +12,18 @@
   它内嵌的敌人分级表是别人的数据，不能放在 MIT 下。`dist/` 里只剩交接 addon 的 zip；调研文档保留，去掉了分级表的内容。
 - 发布：`.github/workflows/release.yml`（推 `v*` 标签或手动运行时，核对 `dist/` 的 zip 与源码一致，再建 Release）和 `release-notes/`。第一个 Release 是 v0.2.0。
 - 新增 `docs/nexus-page.md`：上架 Nexus Mods 的页面文字。
+- 交接 addon 0.2.1：和 Chef 1.5.x 兼容（见下）。`tests/handoff_sim.sh` 加了变体 F，检查不再写死 Chef 的版本号；在 Chef 1.4.1 和 1.5.1 上都跑过。
 - 新增 `promo/`：宣传视频（中文字幕的动画讲解，约 99 秒）的源文件、封面和 B 站投稿文案。视频由 `promo/render.js` 生成，不入库。
 - `promo/nexus-images.html`：Nexus 页面用的 6 张英文图解（主图、问题、交接过程、优先级、0.2.0 的变化、怎么确认）。
 
 ## Chef Hand-off for MDL3
+
+### 0.2.1 — 2026-11-02
+- **和 Chef 1.5.x 一起用。** Chef 被交接时会收下当时游戏里的回调（`init`、`update`、`render`、`shutdown`，MDL3 和它的 mod 串起来的链），在自己的回调之后运行。Chef 1.5.0 起这些回调在它的卡死看门狗下面：一次调用超过 3 秒就判卡死，整条链被关掉（`switched off boot:... for this session: it hung`），MDL3 也就停了。
+  0.2.1 不再把这些回调交给 Chef：交接前先从全局里摘下，Chef 加载完再放回它自己的回调后面（Chef 的先，MDL3 的链后）；Chef 没起来时原样放回。Chef 不再拥有、计时或终止它们。
+- `chef_handoff.log` 多记：交接前后的调试钩子状态；MDL3 的某次调用超过 0.5 秒 CPU 时间时的一行。
+- 测试：自写测试 80 项；`tests/handoff_sim.sh` 新增变体 F（对方更新链里一次 3.6 秒的调用），检查改成不写死 Chef 的版本号，在 Chef 1.4.1 和 1.5.1 上都全过（58 项，加真实的 HUDdle 62 项）。0.2.0 在 1.5.1 上过不了 F，这就是复现。
+- **真机上和 Chef 1.5.x 一起用还没有确认**（只在 Chef 自带的模拟器里用真实的 1.5.1 验证过）；真实的 MDL3 为什么会有超过 3 秒的调用，没有 1.5.x 的日志，不知道。
 
 ### 0.2.0 — 2026-11-02
 - 交接前读游戏的补丁文件，找出做给 Chef 的 addon，把它们从 `package.loaded`（以及加载器的 `modules` 表）里摘掉，让 Chef 启动它们。

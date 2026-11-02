@@ -18,7 +18,7 @@ MDL3 照常运行它的 mod，Chef 运行 HUDdle 和别的 Chef mod。原理、�
 2. 启动游戏，在标题画面停 10 秒，进一局任务看 HUDdle。
 3. 不管成不成，把 `%APPDATA%\Arrowhead\Helldivers2\` 里的 `chef_handoff.log` 和 `chef_loader.log` 发回来。
 
-**没有在真实的 MDL3 上测过**：我没有它。在 Chef 自带的模拟器里用三个我写的假 MDL3 启动器测过，HUDdle 0.6.11 也能在这样的安排下启动。
+**真机结果（MDL3 3.0.0-dev.29）**：交接成功，HUDdle 在任务里出现。还没解决的：任务中按 ESC 回飞船会闪退（原因待隔离，见 `docs/chef-under-mdl3.md`）；Treasure Radar 这类没有 `HD2-Requires` 头的 Chef mod 被 Chef 跳过（已知，修法还没做）；MDL3 的 mod（BF5）还没和它一起试过。
 
 ## 为什么 BF5 反馈没有 Chef 版
 
@@ -72,7 +72,7 @@ HUDDLE_LUA=<HUDdle 的 Lua 文件> tests/handoff_sim.sh <Chef 仓库路径>   # 
 - `tests/handoff_sim.sh` 在真实的 Chef 1.4.1 上全过：三种假 MDL3 启动器（init 里启动 / boot 里启动并先普通 `require` / 自己已交接），Chef 报告被谁交接、自己的 boot stub 没运行、Chef 的 mod 启动并绘制、
   假 MDL3 的回调每帧照常运行、游戏的 `init` 恰好一次；用真实的 HUDdle 0.6.11 也能启动。
 - 变异检查：故意改坏 9 处，自写测试全部抓到；模拟器测试抓到影响真实 Chef 行为的三处。
-- **没有验证**：真实的 MDL3。它怎么启动 mod、有没有自己交接，要靠 `chef_handoff.log` 来回答。
+- 真机（MDL3 3.0.0-dev.29）：交接成功，HUDdle 运行正常；ESC 回飞船闪退未解决；**没有验证**：和 MDL3 的 mod 一起运行。
 
 **探针（0.1.0 和 0.2.0）**
 - 0.1.0 在真实游戏里跑过一局：0 错误，没有拦截，开销平均 0.04～0.22 毫秒/帧。

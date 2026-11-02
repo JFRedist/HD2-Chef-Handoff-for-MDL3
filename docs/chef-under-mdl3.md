@@ -60,9 +60,28 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 | `tests/handoff_sim.sh`（真实的 Chef，Chef 自带的模拟器） | **A** 假 MDL3 在 `init` 里启动 addon；**B** 假 MDL3 在 `boot` 里启动 addon，并先用普通 `require` 试 Chef 的 mod；**C** 假 MDL3 自己已经交接。检查：Chef 报告被谁交接、自己的 boot stub 没有运行、Chef 的 mod 启动并绘制、交接 addon 不会被 Chef 再启动一次、假 MDL3 的回调（3 个，没有 `init`）每帧照常运行（60 秒约 3600 次）、游戏的 `init` 恰好一次、日志和状态文件。可选 **D**：设置 `HUDDLE_LUA` 用真实的 HUDdle 0.6.11（不在仓库里） |
 | 变异检查 | 故意改坏 9 处（没有延迟、没有 `phase`、不检查 Chef 在运行、忽略崩溃标记、不 `pcall`、不写 ok 标记、丢参数、不清便条、不检查 Chef 是否安装）：自写测试全部抓到；模拟器测试抓到其中会影响真实 Chef 行为的三处（延迟、`phase`、已在运行的检查） |
 
+## 第一次真机结果（2026-11-02，MDL3 3.0.0-dev.29，Chef 1.4.1）
+
+来自用户上传的 `chef_handoff.log`、`chef_loader.log`、`chef_handoff_state.txt`：
+
+- **交接成功。** `chef_handoff.log`：6.0 秒时交接，`Chef Shared Loader 1.4.1 started`；`chef_loader.log`：`started by MDL3 chef_handoff 0.1.0, which handed off to me`，
+  `start-up: started by the boot in ...patch_85 (MDL3 3.0.0-dev.29 game boot (PUC Lua 5.1, protected preview))`，Chef 自己的 boot stub 没运行，HUDdle 0.6.11 启动并在任务里出现，
+  任务识别（world 4: mission, 9260 units, 1061 levels）、F9 菜单、引擎三角形绘制都正常，开销平均 0.04～0.19 ms/帧。
+- **MDL3 启动 addon 的办法确认了**：它启动带 `HD2-Addon` 头的 Lua（交接 addon 被启动了；`hd2_data_hub`、`treasure_radar` 也被它启动过，Chef 因此跳过它们）。
+- MDL3 给 addon 的全局（交接 addon 启动时的日志）：`CowboyBingusModLoader`（10 项：`api discovery guards log_directory mdl3 modules open_log open_log_direct provider version`）、
+  `MDL3`（44 项，含 `audio bridge_epoch generation heartbeat reconnects stopping pending performance version`……）、`MDL`（34 项）、`HD2Data`（20 项，含 `aim player_ammo players mission stratagems`……）、
+  `ModOptionsMenu`（MDL3 自己的，`provider` 字段）。`HD2Data.player_ammo` / `aim` 说明 MDL3 的数据中心本身就有弹药和瞄准的数据。
+- **发现一：Chef 的 mod 如果没有 `HD2-Requires: chef-shared-loader` 头，并且被 MDL3 用普通 `require` 启动时没有报错，Chef 会认为它"已经被别的加载器启动"而跳过。**
+  Treasure Radar（`local chef = ...` 之后只在函数里用 `chef.`）就是这样：日志里 `mods/chef/treasure_radar: already started by another loader (started), not started again`，实际没有运行。
+  HUDdle 因为加载时就报错（`attempt to call field 'time' (a nil value)`），被当作失败而被 Chef 启动。修法：交接前把这类 mod 从 `package.loaded` 里摘掉（还没做）。
+- **发现二（未解决）：任务中按 ESC 回飞船，游戏闪退。** `chef_loader.log` 里任务开始 27 秒后就是 `shutdown (clean)`，没有 Chef 在回飞船时平时会记的下一个世界（"world 5: not a mission (24 units, 0 levels)"）：
+  游戏没有切换场景，直接走了退出流程。同一个日志里，只用 Chef 的那些启动（多次任务来回）回飞船都正常。
+  模拟器里同样的安排（假 MDL3 + 交接 + 真 HUDdle）加"任务中途换世界"没有崩溃，所以 Chef 自己的世界切换逻辑不是原因；是 MDL3 预览版自己、HD2 Data Hub、
+  交接、还是 HUDdle 与 MDL3 的相互影响，需要隔离实验（见下一次来回的结果）。
+
 ## 没有验证的，和怎么从日志判断
 
-- **真实的 MDL3。** 我没有它，三个假启动器是按 BF5 的 MDL3 版代码和 Chef 的文档推出来的。要看 `chef_handoff.log`：
+- **MDL3 的 mod（BF5 反馈）和交接一起用。** 交接本身已在真实的 MDL3 上成功（见上），但还没有和 MDL3 的 mod 一起试过。如果出问题，看 `chef_handoff.log`：
   - 没有这个文件：MDL3 没启动 addon。需要 MDL3 自己的说明（请上传 MDL3 的包）。
   - 有，但 `update` 不是 function：MDL3 用别的方式调用 addon，日志开头的表里能看出 MDL3 暴露了什么。
   - `not installed`：看 Chef 的补丁是不是被部署了。

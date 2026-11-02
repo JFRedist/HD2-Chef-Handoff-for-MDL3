@@ -14,11 +14,11 @@ MDL3 照常运行它的 mod，Chef 运行 HUDdle 和别的 Chef mod。原理、�
 
 **要做的事：**
 
-1. 按 [`handoff/README.md`](handoff/README.md) 安装 [`dist/Chef-Hand-off-for-MDL3-0.1.0.zip`](dist/Chef-Hand-off-for-MDL3-0.1.0.zip)，**MDL3 的优先级要比 Chef 高**（Arsenal 里怎么摆看它的 First / Last mod highest priority 设置，说明里有），Purge 再 Deploy。
+1. 按 [`handoff/README.md`](handoff/README.md) 安装 [`dist/Chef-Hand-off-for-MDL3-0.2.0.zip`](dist/Chef-Hand-off-for-MDL3-0.2.0.zip)，**MDL3 的优先级要比 Chef 高**（Arsenal 里怎么摆看它的 First / Last mod highest priority 设置，说明里有），Purge 再 Deploy。
 2. 启动游戏，在标题画面停 10 秒，进一局任务看 HUDdle。
 3. 不管成不成，把 `%APPDATA%\Arrowhead\Helldivers2\` 里的 `chef_handoff.log` 和 `chef_loader.log` 发回来。
 
-**真机结果（MDL3 3.0.0-dev.29）**：交接成功，HUDdle 在任务里出现。还没解决的：任务中按 ESC 回飞船会闪退（原因待隔离，见 `docs/chef-under-mdl3.md`）；Treasure Radar 这类没有 `HD2-Requires` 头的 Chef mod 被 Chef 跳过（已知，修法还没做）；MDL3 的 mod（BF5）还没和它一起试过。
+**真机结果（MDL3 3.0.0-dev.29）**：交接成功，HUDdle 在任务里出现，正常完成任务回飞船没有问题，BF5 反馈（MDL3）已被 MDL3 加载。还没解决的：第一次试时任务中按 ESC 回飞船闪退了一次（之后没有再测这条路，原因不明，见 `docs/chef-under-mdl3.md`）。Treasure Radar 这类没有 `HD2-Requires` 头的 Chef mod 被 Chef 跳过，0.2.0 修了（交接前把它们从 MDL3 的"已启动"里摘掉）。
 
 ## 为什么 BF5 反馈没有 Chef 版
 
@@ -67,12 +67,12 @@ HUDDLE_LUA=<HUDdle 的 Lua 文件> tests/handoff_sim.sh <Chef 仓库路径>   # 
 
 ## 验证状态
 
-**交接 addon（0.1.0）**
-- `tests/test_handoff.lua` 40 项全过（6 秒前不交接、之后一次、便条内容、状态文件、日志、`update` 链保持；Chef 没装 / 已在运行 / 上次崩溃 / 核心报错 / 各种奇怪的游戏）。
-- `tests/handoff_sim.sh` 在真实的 Chef 1.4.1 上全过：三种假 MDL3 启动器（init 里启动 / boot 里启动并先普通 `require` / 自己已交接），Chef 报告被谁交接、自己的 boot stub 没运行、Chef 的 mod 启动并绘制、
+**交接 addon（0.2.0）**
+- `tests/test_handoff.lua` 64 项全过（6 秒前不交接、之后一次、便条内容、状态文件、日志、`update` 链保持；Chef 没装 / 已在运行 / 上次崩溃 / 核心报错 / 各种奇怪的游戏）。
+- `tests/handoff_sim.sh` 在真实的 Chef 1.4.1 上全过：四种假 MDL3 启动器（init 里启动 / boot 里启动并先普通 `require` / 同前但只留下 `package.loaded` / 自己已交接），Chef 报告被谁交接、自己的 boot stub 没运行、Chef 的 mod 启动并绘制、
   假 MDL3 的回调每帧照常运行、游戏的 `init` 恰好一次；用真实的 HUDdle 0.6.11 也能启动。
-- 变异检查：故意改坏 9 处，自写测试全部抓到；模拟器测试抓到影响真实 Chef 行为的三处。
-- 真机（MDL3 3.0.0-dev.29）：交接成功，HUDdle 运行正常；ESC 回飞船闪退未解决；**没有验证**：和 MDL3 的 mod 一起运行。
+- 变异检查：故意改坏 20 处（0.1.0 的 9 处和 0.2.0 新增的 11 处），自写测试全部抓到（一个防御性的等价变异除外）；模拟器测试抓到影响真实 Chef 行为的那些，并且复现了 0.1.0 漏掉 Treasure Radar 的那句日志。
+- 真机（MDL3 3.0.0-dev.29）：0.1.0 交接成功，HUDdle 运行正常，正常结算回飞船没问题；ESC 回飞船闪退一次，未复现；0.2.0（摘掉 Chef 的 mod）还没有在真机上跑过；**没有验证**：BF5 反馈在这种安排下的实际效果。
 
 **探针（0.1.0 和 0.2.0）**
 - 0.1.0 在真实游戏里跑过一局：0 错误，没有拦截，开销平均 0.04～0.22 毫秒/帧。

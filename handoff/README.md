@@ -1,4 +1,4 @@
-# Chef Hand-off for MDL3 0.1.0
+# Chef Hand-off for MDL3 0.2.0
 
 让 **Chef Shared Loader**（以及只能在它上面运行的 mod，比如 **HUDdle**）和 **MDL3**（以及 BF5 反馈这类 MDL3 mod）在同一个游戏里一起工作。
 
@@ -13,10 +13,17 @@ Chef 的文档（"For other loaders"）给其它加载器留了一个交接办�
 这个 mod 在 MDL3 那一边做这件事：进游戏 6 秒后把游戏交给 Chef。之后 MDL3 照常运行它的 mod，Chef 运行它的 mod（HUDdle 之类）。
 它不改任何别的东西；没装 Chef 或者 Chef 已经在运行时什么也不做。
 
+## 0.2.0 比 0.1.0 多了什么
+
+第一次真机运行（见 `docs/chef-under-mdl3.md`）显示：MDL3 会把**所有**带 `HD2-Addon` 头的 Lua 都启动一遍，包括 Chef 的 mod，只是给它们的不是 Chef。
+HUDdle 在这种启动里会报错，所以 Chef 之后正常启动了它；Treasure Radar 没报错，MDL3 就当它已经在运行，Chef 看到后也跳过了它，所以 Treasure Radar 一直没有运行。
+0.2.0 在交接前读游戏的补丁文件（Chef 自己也这样读），找出做给 Chef 的 addon，把它们从 `package.loaded`（以及加载器自己的 `modules` 表，如果有）里摘掉，Chef 就会正常启动它们。
+MDL3 的列表里这些 mod 仍然会显示"加载失败"或"已启用"，这是 MDL3 对它们的看法，不影响 Chef 运行它们。
+
 ## 安装
 
 1. 你已经有：MDL3 和它的 mod（BF5 反馈）、Chef Shared Loader（1.2.0 以上）、HUDdle。
-2. 把 `dist/Chef-Hand-off-for-MDL3-0.1.0.zip` 加进 Arsenal / HD2 Mod Manager 并启用。
+2. 把 `dist/Chef-Hand-off-for-MDL3-0.2.0.zip` 加进 Arsenal / HD2 Mod Manager 并启用。
 3. **优先级：MDL3 的优先级要比 Chef 高**（说的是优先级，不是"先加载"：优先级高的那个启动器，游戏才会运行它）。其余 mod 的顺序没关系。
    Chef 和 HUDdle 的说明都要求 Chef 的优先级最高，这里正相反：游戏运行的 boot 必须是 MDL3 的。
    在 Arsenal 里怎么摆，看它的设置：
@@ -33,7 +40,8 @@ Chef 的文档（"For other loaders"）给其它加载器留了一个交接办�
 | 看哪里 | 成功的样子 |
 |---|---|
 | `%APPDATA%\Arrowhead\Helldivers2\chef_handoff.log` | 最后一行是 `Chef Shared Loader 1.4.x started` |
-| `chef_loader.log`（同一个文件夹） | 有 `started by MDL3 chef_handoff 0.1.0, which handed off to me`，和 `started mods/rosensterner/minimal_hud` |
+| `chef_loader.log`（同一个文件夹） | 有 `started by MDL3 chef_handoff 0.2.0, which handed off to me`，和 `started mods/rosensterner/minimal_hud`、`started mods/chef/treasure_radar`（有 Treasure Radar 的话） |
+| `chef_handoff.log` 的中段 | `made for Chef: ...` 列出它认出的 Chef mod；`taken off package.loaded, so that Chef starts them: ...` 列出被摘掉的 |
 | 游戏里 | 任务中出现 HUDdle 的 HUD；按 F9 出 Chef 的菜单；BF5 反馈照常 |
 
 ## 不看日志，先看哪个不工作
@@ -48,7 +56,7 @@ Chef 的文档（"For other loaders"）给其它加载器留了一个交接办�
 
 | `chef_handoff.log` 里 | 意思 |
 |---|---|
-| 文件不存在 | MDL3 没有启动这个 mod（我需要知道 MDL3 怎么登记 mod，见下） |
+| 文件不存在 | MDL3 没有启动这个 mod（请把 MDL3 的 zip 也传给我，让我看它怎么启动 mod） |
 | `Chef Shared Loader ... started` | 成功 |
 | `Chef Shared Loader is not installed` | 游戏里找不到 Chef 的核心：Chef 没装、没部署，或者被禁用了 |
 | `Chef Shared Loader is running already` | Chef 已经在运行（MDL3 自己交接了，或者 Chef 排在最上面），本 mod 什么也没做 |

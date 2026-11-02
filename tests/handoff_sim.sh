@@ -25,6 +25,8 @@ cp "$HERE"/tests/fixtures/handoff/*.lua "$HERE"/tests/fixtures/handoff/*.json "$
 cp "$HANDOFF_LUA" "$SCRATCH/fix/chef_handoff.lua"
 sed -i 's#\.\./\.\./\.\./handoff/chef_handoff\.lua#chef_handoff.lua#' "$SCRATCH"/fix/mod_*.json
 FIX="$SCRATCH/fix"
+VER=$(sed -n "s/^local VERSION = '\([^']*\)'.*/\1/p" "$HANDOFF_LUA" | head -1)      # the addon's version, with its dots escaped for grep
+VERRE=${VER//./\\.}
 
 fails=0
 need()    { if grep -Eq -- "$1" "$2"; then echo "  ok    $3"; else echo "  FAIL  $3   (no line matches: $1)"; fails=$((fails + 1)); fi; }
@@ -40,11 +42,11 @@ run_variant() {   # name, mod json, extra files...
 }
 
 echo '== A: the other loader starts its addons in init; Chef is handed the game on the first frames after 6 s'
-run_variant a mod_a.json "$FIX/standin_chef_addon.lua"
+run_variant a mod_a.json "$FIX/standin_chef_addon.lua" "$FIX/standin_chef_addon_norequires.lua"
 A="$SCRATCH/a.txt"
 need '\[stand-in mdl3\] init' "$A" 'the stand-in loaders boot ran (not Chefs stub)'
 need '\[stand-in mdl3\] mods/jfredist/chef_handoff -> loaded' "$A" 'it started the hand-off addon'
-need 'started by MDL3 chef_handoff 0\.1\.0, which handed off to me' "$A" 'Chef says it was handed the game, and by whom'
+need "started by MDL3 chef_handoff $VERRE, which handed off to me" "$A" 'Chef says it was handed the game, and by whom'
 need 'boot scripts of mine, not run: .*my start-up stub' "$A" 'Chefs own boot stub is not run (the other loaders boot is the one the game ran)'
 need 'started mods/jfredist/handoff_standin 0\.0\.1' "$A" 'a mod made for Chef starts'
 need '\[mods/jfredist/handoff_standin\] stand-in addon started on Chef Shared Loader 1\.4\.1' "$A" 'and runs on Chefs API'
@@ -57,28 +59,45 @@ need 'mods/jfredist/handoff_standin	running		addon	0\.0\.1	0	' "$A" 'the loader 
 refuse 'GAME CRASH|would have ended| ERR |blocked:' "$A" 'no crash, no ERR, nothing blocked'
 hl=$(kept "$SCRATCH/keep_a" 'chef_handoff.log'); hs=$(kept "$SCRATCH/keep_a" 'chef_handoff_state.txt')
 if [ -n "$hl" ]; then
-  need 'chef_handoff 0\.1\.0 loaded; the game.s update is a function' "$hl" 'chef_handoff.log: the addon says it loaded and found an update to hook'
+  need "chef_handoff $VERRE loaded; the game.s update is a function" "$hl" 'chef_handoff.log: the addon says it loaded and found an update to hook'
   need 'CowboyBingusModLoader = table\(' "$hl" 'and lists the loader table it found'
   need ' 6\.[0-9] s \| handing off: require' "$hl" 'and that it handed off after the 6 s delay'
   need 'Chef Shared Loader 1\.4\.1 started' "$hl" 'and that Chef started'
 else echo '  FAIL  chef_handoff.log was not written'; fails=$((fails + 1)); fi
-if [ -n "$hs" ] && grep -q '^ok 0.1.0' "$hs"; then echo '  ok    chef_handoff_state.txt says ok'; else echo '  FAIL  chef_handoff_state.txt does not say ok'; fails=$((fails + 1)); fi
+if [ -n "$hs" ] && grep -q "^ok $VERRE" "$hs"; then echo '  ok    chef_handoff_state.txt says ok'; else echo '  FAIL  chef_handoff_state.txt does not say ok'; fails=$((fails + 1)); fi
 
 echo '== B: the other loader starts every addon in its boot, tries the Chef mod with a plain require first'
-run_variant b mod_b.json "$FIX/standin_chef_addon.lua"
+run_variant b mod_b.json "$FIX/standin_chef_addon.lua" "$FIX/standin_chef_addon_norequires.lua"
 B="$SCRATCH/b.txt"
 need '\[stand-in mdl3\] mods/jfredist/handoff_standin -> loaded' "$B" 'the plain require of a Chef mod under the other loader does nothing (the mod stops at once without the chef table)'
 need '\[stand-in mdl3\] boot done; init ran yet\? nil' "$B" 'the hand-off addon was started before the game called init'
-need 'started by MDL3 chef_handoff 0\.1\.0, which handed off to me' "$B" 'the hand-off still comes, on the first frames after the delay'
+need "started by MDL3 chef_handoff $VERRE, which handed off to me" "$B" 'the hand-off still comes, on the first frames after the delay'
 need 'started mods/jfredist/handoff_standin 0\.0\.1' "$B" 'and Chef starts the mod made for it although the other loader already tried it'
 need 'running the callbacks the boot script in .* set before it started me \(3\)' "$B" 'with the other loader callbacks kept, init not among them'
 need 'stand-in addon: [0-9]{3,} frames' "$B" 'it ran'
+need '\[stand-in mdl3\] mods/jfredist/handoff_standin2 -> loaded' "$B" 'the second stand-in (no HD2-Requires line, like Treasure Radar) survives the other loader plain require: it is "started" without Chef'
+need 'started mods/jfredist/handoff_standin2 0\.0\.2' "$B" 'and Chef starts it all the same, because the hand-off addon took it off package.loaded'
+refuse 'mods/jfredist/handoff_standin2: already started by another loader' "$B" 'Chef does not skip it as started by another loader'
+need 'stand-in 2: [0-9]{3,} frames' "$B" 'it ran on Chef for the whole session'
 need '\[stand-in mdl3\] init' "$B" 'the games own init ran once (not dropped by the hand-off)'
 refuse 'GAME CRASH|would have ended| ERR |blocked:' "$B" 'no crash, no ERR, nothing blocked'
 test "$(grep -c '^\[stand-in mdl3\] init' "$B")" = 1 && echo '  ok    init ran exactly once' || { echo '  FAIL  init did not run exactly once'; fails=$((fails + 1)); }
 
+echo '== E: as the real MDL3 showed itself in the first real run: a plain require leaves only package.loaded behind, no modules table entries'
+run_variant e mod_e.json "$FIX/standin_chef_addon.lua" "$FIX/standin_chef_addon_norequires.lua"
+E="$SCRATCH/e.txt"
+grep -n 'modules\[' "$FIX/mdl3_boot_e.lua" > /dev/null && { echo '  FAIL  the E stand-in must not touch a modules table'; fails=$((fails + 1)); }
+need '\[stand-in mdl3\] mods/jfredist/handoff_standin2 -> loaded' "$E" 'the stand-in Chef addon without an HD2-Requires line is "started" without Chef (as Treasure Radar was)'
+need "started by MDL3 chef_handoff $VERRE, which handed off to me" "$E" 'the hand-off comes'
+need 'started mods/jfredist/handoff_standin2 0\.0\.2' "$E" 'and Chef starts it all the same'
+need 'started mods/jfredist/handoff_standin 0\.0\.1' "$E" 'and the one with the HD2-Requires line'
+refuse 'mods/jfredist/handoff_standin2?: already started by another loader' "$E" 'Chef skips neither as started by another loader'
+need 'stand-in 2: [0-9]{3,} frames' "$E" 'the second one ran on Chef for the whole session'
+need 'taken off package.loaded, so that Chef starts them: .*handoff_standin2' "$(kept "$SCRATCH/keep_e" 'chef_handoff.log')" 'chef_handoff.log: it says it took them off the list'
+refuse 'GAME CRASH|would have ended| ERR |blocked:' "$E" 'no crash, no ERR, nothing blocked'
+
 echo '== C: the other loader hands off to Chef itself, in its boot: the addon leaves it alone'
-run_variant c mod_c.json "$FIX/standin_chef_addon.lua"
+run_variant c mod_c.json "$FIX/standin_chef_addon.lua" "$FIX/standin_chef_addon_norequires.lua"
 C="$SCRATCH/c.txt"
 need 'started by stand-in MDL3 \(own hand-off\), which handed off to me' "$C" 'Chef was started by the other loader'
 need 'started mods/jfredist/handoff_standin 0\.0\.1' "$C" 'the Chef mod runs'

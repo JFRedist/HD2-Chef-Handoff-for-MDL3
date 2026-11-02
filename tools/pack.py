@@ -6,7 +6,7 @@
 mod.json (the same shape Chef Shared Loader's own simulator reads, so its tools/modsim/modsim.py can run it too):
 
   {
-    "name": "BFV Chef Probe",                  shown in the mod manager
+    "name": "My Mod",                          shown in the mod manager
     "version": "0.1.0",
     "guid": "<a uuid of your own>",
     "description": "What it does. Needs Chef Shared Loader 1.0.0 or newer.",

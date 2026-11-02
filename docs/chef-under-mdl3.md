@@ -127,11 +127,19 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 
 ## 第三次真机结果（2026-11-02，0.2.0）
 
-作者的试玩报告，**没有传日志**：
+作者的试玩报告，**没有传 Chef 的日志**：
 
 - **任务中按 ESC 回飞船没有闪退。**
 - **BF5 反馈（MDL3 版）正常。**
-- **Treasure Radar 没问题。**（0.1.0 时被 Chef 跳过的那个。）没有 0.2.0 的 `chef_handoff.log`，所以不知道是补丁扫描认出了它，还是用了内置名单；日志里 `patch files read:` 那一行会告诉。
+- **Treasure Radar 没问题。**（0.1.0 时被 Chef 跳过的那个。）
+
+后来传了 0.2.0 的 `chef_handoff.log`（02:47）：
+
+- 6.0 秒：`patch files read: 91 (4 addons, 2 made for Chef, 0 read errors) in 5 ms`。读了 91 个补丁文件，找到 4 个 addon（交接 addon、Treasure Radar、HD2 Data Hub、HUDdle），认出 2 个做给 Chef 的（Treasure Radar 和 HUDdle），没有读文件的错误，用了 5 毫秒。
+  **所以补丁扫描在真机上起作用，不是靠内置名单。**
+- `taken off package.loaded, so that Chef starts them: mods/chef/treasure_radar`：只有 Treasure Radar 在 `package.loaded` 里（HUDdle 在 MDL3 里加载就失败了，不在）。摘掉之后 `Chef Shared Loader 1.4.1 started (api 1)`。
+- MDL3 的 `CowboyBingusModLoader.modules` 表有 19 个条目，状态是 `managed`、`not installed`、`load failed (managed): …`（HUDdle），**没有** `loaded` / `loading`。
+  所以交接 addon 里改 `modules` 表的那一步（针对 Bingus 式加载器）在这个 MDL3 上用不上，起作用的只有 `package.loaded`。
 
 ## ESC 回飞船闪退：知道什么，不知道什么
 
@@ -151,8 +159,6 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 
 ## 还没有确认的
 
-- **补丁扫描在真机上读到了什么。** Treasure Radar 起来了，但没有 0.2.0 的 `chef_handoff.log`，不知道是扫描认出的还是内置名单（只有两个名字）。
-  对别的 Chef mod，只有扫描管用：`patch files read:` 那一行会说读了几个补丁、认出几个做给 Chef 的。
 - **ESC 闪退的原因。** 见上。
 - **别的 MDL3 版本。** 只在 MDL3 3.0.0-dev.29（"protected preview"）上测过。MDL3 以后怎么启动 addon、给 addon 什么全局，可能会变；`chef_handoff.log` 开头列出的全局表能看出变化。
 - **别的 Chef mod。** 真机上只有 HUDdle 0.6.11 和 Treasure Radar 0.7.1n。其它 Chef mod 只在模拟器里用替身测过。
@@ -166,6 +172,7 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 - **Chef 在游戏运行 6 秒才启动，它的世界检测和 GUI 受影响吗？** 真机上没有：识别了任务世界，引擎三角形绘制正常，HUDdle 平均 0.7 毫秒/帧。
 - **BF5 反馈（MDL3）和交接一起用？** 0.1.0 的 `MDL.log`：它被 MDL3 启用并注册了选项；0.2.0 作者报告正常。
 - **Treasure Radar 会运行吗？** 0.1.0 不会：MDL3 "启动"过它，Chef 就当它已经被别的加载器启动而跳过。0.2.0 起来了（作者的试玩报告）。
+- **补丁扫描在真机上读得到、认得出吗？** 读得到、认得出：91 个补丁文件 5 毫秒，认出 2 个做给 Chef 的（见第三次真机结果）。
 
 ## 许可
 

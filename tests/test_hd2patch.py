@@ -143,19 +143,6 @@ class PackTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 pack.build(spec, out)
 
-    def test_the_probe_package_builds(self):
-        with tempfile.TemporaryDirectory() as td:
-            zpath = pack.build(os.path.join(ROOT, 'probe', 'mod.json'), td)
-            with zipfile.ZipFile(zpath) as z:
-                z.extractall(os.path.join(td, 'x'))
-            _, entries = hp.read_archive(os.path.join(td, 'x', 'core', hp.PATCH_NAME))
-            self.assertEqual(entries[0]['fid'], hp.resource_hash('mods/jfredist/bfv_chef_probe'))
-            src = hp.lua_source(entries[0]['data'])
-            self.assertTrue(src.startswith(b'-- HD2-Addon: mods/jfredist/bfv_chef_probe\n'))
-            with open(os.path.join(ROOT, 'probe', 'bfv_chef_probe.lua'), 'rb') as f:
-                self.assertEqual(src, f.read())
-
-
     def test_the_handoff_package_builds(self):
         with tempfile.TemporaryDirectory() as td:
             zpath = pack.build(os.path.join(ROOT, 'handoff', 'mod.json'), td)

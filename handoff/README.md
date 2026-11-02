@@ -46,7 +46,7 @@ MDL3 自己仍然是按它的方式看这些 mod 的（它的 `MDL.log` 里 HUDd
 |---|---|
 | `%APPDATA%\Arrowhead\Helldivers2\chef_handoff.log` | 最后一行是 `Chef Shared Loader 1.4.x started` |
 | `chef_loader.log`（同一个文件夹） | 有 `started by MDL3 chef_handoff 0.2.0, which handed off to me`，和 `started mods/rosensterner/minimal_hud`、`started mods/chef/treasure_radar`（有 Treasure Radar 的话） |
-| `chef_handoff.log` 的中段 | `made for Chef: ...` 列出它认出的 Chef mod；`taken off package.loaded, so that Chef starts them: ...` 列出被摘掉的 |
+| `chef_handoff.log` 的中段 | 真机上是这样的：`patch files read: 91 (4 addons, 2 made for Chef, 0 read errors) in 5 ms`、`made for Chef: mods/chef/treasure_radar mods/rosensterner/minimal_hud`、`taken off package.loaded, so that Chef starts them: mods/chef/treasure_radar`。HUDdle 不在最后一行里是正常的：它在 MDL3 里加载就失败了，本来就不在 `package.loaded` 里 |
 | 游戏里 | 任务中出现 HUDdle 的 HUD；按 F9 出 Chef 的菜单；BF5 反馈照常 |
 
 ## 不看日志，先看哪个不工作
@@ -90,7 +90,7 @@ MDL3 自己仍然是按它的方式看这些 mod 的（它的 `MDL.log` 里 HUDd
 **真机**（作者的游戏：MDL3 3.0.0-dev.29，Chef 1.4.1，HUDdle 0.6.11，BF5 击杀反馈 MDL3 版 2.0.1，Treasure Radar 0.7.1n）：
 
 - 0.1.0（有日志）：交接成功；HUDdle 正常，一局约 8 分钟没有错误；正常结算回飞船没问题；BF5 反馈被 MDL3 启用；Treasure Radar 被 Chef 跳过（0.2.0 修的就是这个）；任务中按 ESC 回飞船闪退过一次，没有找到原因，之后没有再出现。
-- 0.2.0（作者的试玩报告，没有传日志）：Treasure Radar 起来了，ESC 回飞船没有闪退，BF5 反馈正常。
+- 0.2.0：作者的试玩报告说 Treasure Radar 起来了，ESC 回飞船没有闪退，BF5 反馈正常（Chef 的日志没传）。`chef_handoff.log` 证实补丁扫描在真机上起作用：读了 91 个补丁文件，认出 Treasure Radar 和 HUDdle 是做给 Chef 的，把 Treasure Radar 从 `package.loaded` 里摘掉，然后 Chef 1.4.1 启动。
 
 **模拟器**：在 Chef 自带的模拟器里，用我写的**假 MDL3 启动器**（代替 MDL3 的 boot）测过：启动器在 `init` 里启动 mod / 在 `boot` 里启动 mod（并先用普通 `require` 试一遍 Chef 的 mod）/
 同前但只留下 `package.loaded`（真实 MDL3 的样子）/ 自己已经交接给 Chef。几种情况下 Chef 都按预期运行，假 MDL3 的回调每帧照常被调用，游戏自己的 `init` 没有被重复或跳过；用真实的 HUDdle 0.6.11 也试过，能启动。

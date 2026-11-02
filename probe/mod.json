@@ -1,9 +1,0 @@
-{
-  "name": "BFV Chef Probe",
-  "version": "0.2.0",
-  "guid": "b37ef307-a850-474f-b117-fa15df949d3f",
-  "description": "Research probe for a Chef Shared Loader version of the Battlefield 5 hit/kill feedback mod. Read-only: it writes bfv_probe.log, bfv_probe_api.txt and bfv_probe_summary.txt into %APPDATA%\\Arrowhead\\Helldivers2 and changes nothing in the game. Needs Chef Shared Loader 1.0.0 or newer (1.4.0 recommended).",
-  "lua": [
-    { "resource": "mods/jfredist/bfv_chef_probe", "file": "bfv_chef_probe.lua" }
-  ]
-}

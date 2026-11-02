@@ -25,8 +25,18 @@
 - **安装建议改了**：本 mod 放在**最低优先级**（原来建议放在 MDL3 和 Chef 之间）。一位玩家的日志显示 MDL3 dev.33 只看了 837 个补丁文件里的前 512 个，没发现放在后面的本 mod。改了 README、`handoff/README.md`，`docs/chef-under-mdl3.md` 加了一节。他猜的 “allowed roots” 只影响 MDL3 设置里的列表和图标。Nexus 文案没改。
 - 测试和打包在 Windows 上也能跑：`tests/test_handoff.lua` 在 Windows 上用 cmd 建删目录（原来是 `rm -rf`、`mkdir -p`），`tools/pack.py` 写 `manifest.json` 固定用 LF（原来在 Windows 上是 CRLF，zip 就和 `dist/` 对不上了）。README 的“开发与测试”加了 Windows 上要注意的几件事。
 - 交接 addon 0.2.3（见下）。`tests/handoff_sim.sh` 加了变体 H（照 0.2.2 真机日志做的 MDL3 沙箱 + 一次慢调用）；`tests/test_handoff.lua` 加了沙箱模型和守着新键的全局表。0.2.2 的发布说明没有发布过，换成 0.2.3 的。
+- 交接 addon 0.2.4（见下）：[issue #1](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/1)。`tests/test_handoff.lua` 加了三个 16 KB 之后的例子（124 项）；`docs/chef-under-mdl3.md` 加了“0.2.4”一节。
+- 主 README 改成简洁的中英双语：真机状态表挪到 `docs/status.md`，仓库结构、测试和发布挪到 `docs/development.md`，BF5 Chef 版研究记录里探针为什么删掉，并进 `docs/chef-feasibility.md` 的开头。
 
 ## Chef Hand-off for MDL3
+
+### 0.2.4 — 2026-11-02
+- **认出 `local chef = ...` 在前 16 KB 之后的 Chef mod。** [issue #1](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/1)（FworksHN 查到了原因）：NarrowHUD 1.0.6 的 Lua 开头是 220 KB 的数据表，`local chef = ...` 在那之后，也没有 `HD2-Requires` 头行。0.2.3 只看每个 Lua 的前 16 KB，没认出它，Chef 就当它已经被别的加载器启动而跳过。
+  0.2.4：前 16 KB 里两样标记都没有的 addon，读完剩下的部分再找行首的 `local chef = ...`（被 16 KB 那条线切开的也找得到）；`HD2-Requires` 头行仍只在前 16 KB 里找，超过 4 MB 的 Lua 仍不读。只有 addon 会多读，开销很小。
+- `chef_handoff.log`：`patch files read: ...` 后面多一段 `; N addon(s) read past the first 16 KB`。
+- Lua 开头注释里看门狗的版本改成 1.4.0 起（原来写 1.5.0 起）；`mod.json` 的说明也改了这一处，并加上“本 mod 放在最低优先级”。
+- 测试：自写 124 项；模拟器 86 项（加真实的 HUDdle 90 项），Chef 1.4.1 和 1.5.1 上都全过（在 Windows 11 上跑的）。用去掉头行的 NarrowHUD 2.2.0 试过：0.2.3 认不出，0.2.4 认得出。在作者自己的补丁文件上模拟，认出的 mod 和 0.2.3 一样。
+- 真机：还没跑过。
 
 ### 0.2.3 — 2026-11-02
 - **在游戏真正的全局表上摘回调。** 0.2.2 的真机日志显示，MDL3 让每个 addon 在自己的沙箱里运行：addon 的 `_G` 不是游戏的全局表，`update`、`shutdown` 是 addon 自己的。0.2.1、0.2.2 在沙箱里摘，Chef 从游戏的全局表上照样拿到 MDL3 的 `update`、`shutdown`，MDL3 的更新一直在 Chef 的看门狗下面跑（1.4.1 和 1.5.x 都是）。0.2.3 在 `getfenv(0)`（Chef 的核心被 `require` 时拿到的那张表，里面要有引擎的 `stingray`）上用它自己的 `rawget`、`rawset` 摘下、放回，便条也放在那里；没有沙箱时和以前一样。

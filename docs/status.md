@@ -1,0 +1,25 @@
+# 真机状态
+
+每个版本在真实游戏里跑出来的结果，和得出结果的依据。每次运行的细节（日志逐行看）在 [`chef-under-mdl3.md`](chef-under-mdl3.md)，版本记录在 [`CHANGELOG.md`](../CHANGELOG.md)。
+
+作者在自己的游戏里测的：MDL3 3.0.0-dev.29 和 3.0.0-dev.33，Chef Shared Loader 1.4.1 和 1.5.1，HUDdle 0.6.11，BF5 击杀反馈 MDL3 版 2.0.1，Treasure Radar 0.7.1n。
+
+| 项目 | 结果 | 依据 |
+|---|---|---|
+| 交接：Chef 在 MDL3 下被启动 | 成功 | 0.1.0 的日志：`chef_handoff.log` 里 `Chef Shared Loader 1.4.1 started`，`chef_loader.log` 里 `started by MDL3 chef_handoff 0.1.0, which handed off to me` |
+| HUDdle 0.6.11 | 任务里正常；一局约 8 分钟没有一条错误，约 0.7 毫秒/帧（它的预算是 1 毫秒） | 0.1.0 的日志 |
+| 完成任务、正常结算回飞船 | 正常（0.1.0，一次） | 日志：任务世界 → 加载 → 飞船，退出时 `shutdown (clean)` |
+| BF5 击杀反馈（MDL3 版）一起用 | 正常 | 0.2.0：作者的试玩报告，没有传日志。0.1.0 的 `MDL.log` 里它被 MDL3 启用并注册了选项；Chef 没有把它再启动一份 |
+| 任务中按 ESC 回飞船 | 0.1.0 下闪退过**一次**，原因没找到，之后没有再出现；0.2.0 下没有闪退 | 0.2.0：作者的试玩报告，没有传日志 |
+| Treasure Radar 这类不带 `HD2-Requires` 头的 Chef mod | 0.1.0 被 Chef 跳过（日志里 `already started by another loader (started)`）；0.2.0 起来了 | 0.2.0：作者的试玩报告（游戏里没问题）；`chef_handoff.log` 里 `taken off package.loaded, so that Chef starts them: mods/chef/treasure_radar` |
+| 认出做给 Chef 的 addon（读补丁文件） | 在真机上起作用，不是靠内置名单 | 0.2.0 的 `chef_handoff.log`：`patch files read: 91 (4 addons, 2 made for Chef, 0 read errors) in 5 ms`，认出的是 Treasure Radar 和 HUDdle |
+| `local chef = ...` 在 16 KB 之后的 Chef mod（NarrowHUD 1.0.6） | 0.2.3 认不出，Chef 跳过了它（[issue #1](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/1)，报告者查到了原因）。0.2.4 修了，**还没在真机上跑过** | 自写测试；用去掉 `HD2-Requires` 头行的 NarrowHUD 2.2.0 试过：0.2.3 认不出，0.2.4 认得出。见 [`chef-under-mdl3.md`](chef-under-mdl3.md) 的“0.2.4”一节 |
+| Chef 的卡死看门狗（1.4.1 和 1.5.x） | 0.2.0 下 Chef 把 MDL3 的回调放在它的卡死看门狗下面，一次调用超过 3 秒就判卡死并终止（评论里有人这样报告，作者转述；1.5.1 和 1.4.1 都有人遇到）。0.2.1、0.2.2 想修，在真实的 MDL3 下没修到（见下两行）；**0.2.3 修好了，真机确认**（见下面 0.2.3 那一行） | 在 Chef 自带的模拟器里，用真实的 1.5.1 和 1.4.1：0.2.0 下对方的更新链都被 `stopped by the hang watchdog: it ran over 3 s` 终止。（这里原来写着“1.4.1 上两版都正常”，是错的：看门狗是 Chef 1.4.0 加的，1.4.1 就已经这样，2026-11-02 补测。）0.2.3 在两个版本上都不会。原因、复现和限制见 [`docs/chef-under-mdl3.md`](chef-under-mdl3.md) |
+| 0.2.1 + Chef 1.5.1 | HUDdle、Treasure Radar（0.7.1）、BF5 反馈都正常；Chef 的看门狗开着，没有判谁卡死，退出时 `shutdown (clean)`。**但 Chef 仍然收下了 MDL3 的两个回调**（`running the callbacks the boot script in ...patch_89 set before it started me (2)`），这正是 0.2.1 要避免的 | 0.2.1 的 `chef_handoff.log`、`chef_loader.log`、`MDL.log`、`MDL3.log` |
+| 0.2.2 + Chef 1.5.1 | 同样都正常，Chef 同样收下两个。0.2.2 多记的日志说清了原因：**MDL3 给每个 addon 一个沙箱**（addon 的 `_G` 不是全局表，有 MDL3 的 `__index` / `__newindex`），addon 的 `update`、`shutdown` 是它自己的；0.2.1、0.2.2 摘的只是沙箱里的，`render` 摘掉了，MDL3 真正的 `update`、`shutdown` 还在游戏的全局表上，Chef 从那里拿走。也就是说 MDL3 的更新一直在 Chef 的看门狗下面跑（只是这台机器上没有超过 3 秒的调用）。0.2.1 后猜的“中间写文件”是错的。0.2.3 改在游戏的全局表上摘 | 0.2.2 的 `chef_handoff.log`（`around the globals`、`still on the globals ... update, shutdown` 等行）、`chef_loader.log`；见 [`docs/chef-under-mdl3.md`](chef-under-mdl3.md) |
+| 0.2.3 + Chef 1.5.1 | 作者：跑起来正常。Chef 的日志里**没有** `running the callbacks ...` 了：Chef 第一次没有收下 MDL3 的任何回调；HUDdle、Treasure Radar 启动，认出任务世界，退出 `shutdown (clean)`。交接 addon 用的是游戏的全局表（`getfenv(0)`，它没有元表），Chef 加载后那里是 Chef 的四个回调，MDL3 的更新每帧一次、在 Chef 后面。MDL3 的 mod 库扫描也正常 | 0.2.3 的 `chef_handoff.log`、`chef_loader.log`、`MDL.log` |
+| 0.2.3 + MDL3 3.0.0-dev.33 + Chef 1.5.1 | 作者：HUDdle、Treasure Radar、BF5 反馈都正常。和 dev.29 下一样：Chef 由 dev.33 的 boot 交接启动，没有收下 MDL3 的回调，MDL3 的更新每帧一次，退出 `shutdown (clean)`。**更新到 dev.33 后的第一次启动里本 mod 没有运行**（`chef_handoff.log` 一行都没写，Chef 也没起来），可 MDL3 的日志和下一次一模一样，原因没找到；下一次起正常 | 两次启动的 `chef_handoff.log`、`chef_loader.log`、`MDL.log`、`MDL3.log`；见 [`docs/chef-under-mdl3.md`](chef-under-mdl3.md) 的“第七次真机结果” |
+| mod 很多（一位玩家：837 个补丁文件）+ MDL3 3.0.0-dev.33 | 交接没有发生：MDL3 只看了 512 个补丁文件（`discovery 3 declared entries in 512 archive(s)`），比这靠后的 addon 一个也没发现，本 mod（当时放在 MDL3 和 Chef 之间）也在其中，MDL3 没有启动它。所以现在建议把本 mod 放在最低优先级（见根目录 [README](../README.md) 的安装步骤）。改了以后的结果还没有回报 | 那位玩家的 `MDL.log`，和更早一次（Chef 在最上面）的 `chef_loader.log`；见 [`docs/chef-under-mdl3.md`](chef-under-mdl3.md) |
+| MDL3 设置里所有 mod 的分类都是“未知” | 0.2.1 那次出现（名字正常）。那次启动时 MDL3 自己读文件的服务坏了：每个 `sys list`、`sys tree` 都失败（`attempt to index upvalue 'kernel' (a nil value)`），图标也读不出（`'images'` 为 nil），mod 库扫描 80 毫秒就结束。这些都发生在交接之前 6 秒。下一次（0.2.2，同样的安装、同样启用交接）扫描正常：1306 毫秒，没有这种错误，Chef 1.5.1 被认作启动加载器。**所以是时有时无的，看起来是 MDL3 自己的；没有做过不启用交接的对照** | 0.2.1 和 0.2.2 两次的 `MDL.log` |
+
+ESC 那次闪退没有找到原因，0.2.0 也没有做任何针对它的改动，所以只能说"没有再出现"，不能说"修好了"。顺带一个事实：闪退那一次还没有装 BF5 反馈（作者当时说还没试 MDL3 的 mod，Chef 的日志里也没有它），之后的几次都装了（详见 [`docs/chef-under-mdl3.md`](chef-under-mdl3.md)）。

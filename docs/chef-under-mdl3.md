@@ -113,12 +113,12 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 
 1. 直接读游戏的补丁文件 `data/9ba626afa44a3aa3.patch_0`、`_1` ……（Chef 自己也这样读它们）。连续 8 个号码都不存在就停，最多到 400 号，总共最多读 0.5 秒。
 2. 每个补丁：开头 4 字节要是 `0xF0000011`；类型数 ≤ 64、条目数 ≤ 4096（再大的是游戏自己的数据，不是 mod 的补丁，跳过）。
-3. 条目表（72 字节头、32 字节类型行、80 字节条目）里只看 Lua 类型（类型 id `a14e8dfa2cd117e2`）、长度大于 16 字节且小于 4 MB 的资源，每个只读前 16 KB。（BF5 反馈的 Lua 有 6 MB，所以不读。）
+3. 条目表（72 字节头、32 字节类型行、80 字节条目）里只看 Lua 类型（类型 id `a14e8dfa2cd117e2`）、长度大于 16 字节且小于 4 MB 的资源，每个先读前 16 KB。（BF5 反馈的 Lua 有 6 MB，所以不读。）
 4. 这段源码要以 **`-- HD2-Addon: mods/<作者>/<名字>` 头开头**，才算 addon。
-5. 是 addon 之后，看它是不是做给 Chef 的，只认两个标记（都在前 16 KB 里）：
-   - **行首的 `local chef = ...`**：Chef 把它的工具表作为 Lua 块的参数交给每个 addon，Chef 的 mod 习惯在开头用这一行接住它。MDL3 的 addon 拿到的是 MDL3 的上下文（有 `log`，没有 `time`），不这样写。
-     只认"行首的代码"，注释里提到的（`-- local chef = ...`）不算。
-   - **`-- HD2-Requires: chef-shared-loader` 头行**：明说需要 Chef。
+5. 是 addon 之后，看它是不是做给 Chef 的，只认两个标记：
+   - **行首的 `local chef = ...`**：Chef 把它的工具表作为 Lua 块的参数交给每个 addon，Chef 的 mod 习惯用这一行接住它。MDL3 的 addon 拿到的是 MDL3 的上下文（有 `log`，没有 `time`），不这样写。
+     只认"行首的代码"，注释里提到的（`-- local chef = ...`）不算。**0.2.4 起**，前 16 KB 里两个标记都没有的 addon，会把剩下的部分读完再找这一行（NarrowHUD 1.0.6 前面有 220 KB 的数据表，见“0.2.4”一节）。
+   - **`-- HD2-Requires: chef-shared-loader` 头行**：明说需要 Chef。它是开头的头行之一，所以只在前 16 KB 里找。
    交接 addon 自己除外（它的注释里提到 chef）。
 6. 认出的名字：从 `package.loaded` 里摘掉（`require` 留下的占位 userdata 不动，Chef 会照常启动那种）；在加载器自己的 `modules` 表里状态是 `loaded` / `loading` 的，改成 `load failed: made for Chef Shared Loader`。然后再交接，Chef 就把它们当作还没启动的 mod 启动。
 7. 一个补丁文件都读不了时，用内置的两个名字（Treasure Radar、HUDdle）。
@@ -126,10 +126,10 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 日志里能看到结果：`patch files read: N (X addons, Y made for Chef, …)`、`made for Chef: …`、`taken off package.loaded, so that Chef starts them: …`。
 
 **会漏掉什么。** 既没有 `local chef = ...` 这一行（比如写成 `local c = ...`、`local chef, log = ...`、`local chef = select(1, ...)`，或者前面有缩进）、也没有 `HD2-Requires` 头的 Chef mod 认不出来，
-症状和原来的 Treasure Radar 一样：`chef_loader.log` 里 `already started by another loader (started), not started again`。标记在前 16 KB 之后的、Lua 超过 4 MB 的，也认不出来。
+症状和原来的 Treasure Radar 一样：`chef_loader.log` 里 `already started by another loader (started), not started again`。Lua 超过 4 MB 的也认不出来；0.2.3 及更早，标记在前 16 KB 之后的也认不出来。
 **会多摘什么。** 一个 MDL3 的 addon 如果恰好有一行行首的 `local chef = ...`，会被摘掉，Chef 会再启动它一份，`chef_loader.log` 里会有 `started mods/<作者>/<名字>`。没见过，也想不出谁会这样写。
 
-`tests/test_handoff.lua` 里每条规则都有例子：有 / 没有 `HD2-Requires` 头、`local chef` 在长注释之后、MDL3 的 addon、超过 4 MB 的 Lua、上千条目的补丁、魔数不对的文件、只在注释里提到 chef、交接 addon 自己、读文件抛错、读不了补丁时的内置名单。
+`tests/test_handoff.lua` 里每条规则都有例子：有 / 没有 `HD2-Requires` 头、`local chef` 在长注释之后、`local chef` 在 220 KB 的数据之后、`local chef` 正好被 16 KB 那条线切开、16 KB 之后才有 `HD2-Requires` 行和缩进的 `local chef` 的 MDL3 addon（不算）、MDL3 的 addon、超过 4 MB 的 Lua、上千条目的补丁、魔数不对的文件、只在注释里提到 chef、交接 addon 自己、读文件抛错、读不了补丁时的内置名单。
 
 ## 第三次真机结果（2026-11-02，0.2.0）
 
@@ -323,6 +323,31 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 **限制**：只有这一份日志；两份日志不是同一次启动，中间如果重新部署过，编号可能有变化（在更高优先级加 mod 只会加在后面，不改前面的编号）。512 是不是 MDL3 固定的上限，要等 MDL3 的作者确认。
 
 **改法**：本 mod 没有 boot，放在哪里都不影响它运行，所以安装说明改成“本 mod 放在最低优先级”（最先部署，编号最小）。作者自己的安装本来就是这样（`patch_0`，第七次真机结果）。别的 MDL3 mod 排在 511 以后也会遇到同样的事，这不是本 mod 能修的。
+
+## 0.2.4：标记在 16 KB 之后的 Chef mod（issue #1，NarrowHUD 1.0.6）
+
+[GitHub issue #1](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/1)（MDL3 3.0.0-dev.32，Chef 1.5.1，0.2.3）：交接成功，但 NarrowHUD 1.0.6（Nexus 17882）没有运行。
+`chef_handoff.log` 的 `made for Chef:` 里没有 `mods/luka189/narrowhud`，所以它留在 `package.loaded` 里，Chef 当它已经被别的加载器启动而跳过。
+报告者查到的原因：0.2.3 每个 Lua 只读前 16 KB；NarrowHUD 1.0.6 的 Lua 有 401095 字节，开头是一大段数据表，`local chef = ...` 在第 222443 字节。他把 16 KB 改成 256 KB，本地就认出来了。
+
+用作者给的 NarrowHUD 2.2.0 核对（只读）：2.2.0 的第 2 行是 `-- HD2-Requires: chef-shared-loader >= 1.2.3`，在前 16 KB 里，0.2.3 本来就认得出（另一位玩家的 `chef_loader.log` 里 NarrowHUD 2.2.0 也是 Chef 启动的）；它的 `local chef = ...` 在第 1648 行、约 305 KB 处。
+1.0.6 认不出，说明它没有那一行头，只能靠后面的 `local chef = ...`。把 2.2.0 的那一行头去掉、重新打成补丁再试：0.2.3 认不出，0.2.4 认得出。
+
+**0.2.4 改了什么**：前 16 KB 里两个标记都没有的 addon（只有带 `-- HD2-Addon:` 头的），把剩下的部分读完，再找行首的 `local chef = ...`；仍然不读超过 4 MB 的 Lua。
+
+- 不带头的 Lua 资源还是只读 16 KB；addon 一般只有几个，所以多读的不多：作者的安装里是 2 个（HD2 Data Hub、First Person Camera，都是 MDL3 的，约 470 KB）。去掉头行的 NarrowHUD 2.2.0（743 KB）在 Lua 5.1 里读完加查找约 7 毫秒。
+- 16 KB 那条线可能正好把 `local chef = ...` 切成两半：读剩下的部分时，前 16 KB 的最后一行也放进去一起找。
+- `-- HD2-Requires:` 那一行只在前 16 KB 里找：它是开头的头行，正文后面的注释里提到它不算。
+- 0.5 秒的预算是在两个补丁文件之间检查的，读一个文件中途不会停。
+- 没有用报告者的方案 A（固定改成 256 KB）：数据表再大一点的 mod 还会碰上。
+- 日志多一段：`patch files read: ... in N ms; K addon(s) read past the first 16 KB`。
+
+在作者自己的补丁文件上模拟（只读，按 0.2.4 的读法读全文）：认出的还是 Treasure Radar 和 HUDdle，没有多认出 MDL3 的 mod。
+
+**测试**：`tests/test_handoff.lua` 加了三个例子（124 项）：`local chef` 在 220 KB 数据之后（认出）、`local chef` 被 16 KB 那条线切开（认出）、16 KB 之后才有 `HD2-Requires` 行和缩进的 `local chef` 的 MDL3 addon（不认）。0.2.3 在新例子上失败 6 项；去掉“前 16 KB 的最后一行一起找”那一步，切开的那个例子失败。
+同一个版本里还改了：Lua 开头注释里“看门狗从 Chef 1.5.0 起”改成 1.4.0（见“更正：Chef 1.4.1 也是这样”），`mod.json` 的说明（Arsenal 里显示的那段）也改了这一处，并加了“本 mod 放在最低优先级”。别的行为没有变。
+
+**还没有在真机上验证**：0.2.4 还没在游戏里跑过；NarrowHUD 1.0.6 本身没有拿到，上面是用去掉头行的 2.2.0 代替的。
 
 ## 按键冲突：MDL3 下运行、自己用 F9 的 mod（2026-11-02）
 

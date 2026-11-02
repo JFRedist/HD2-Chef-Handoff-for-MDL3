@@ -41,11 +41,11 @@ To report a problem, open an [issue](https://github.com/JFRedist/HD2-Chef-Handof
 
 ## 版本 / Version
 
-**0.2.4**：也认得出 `local chef = ...` 在前 16 KB 之后的 Chef mod（NarrowHUD 1.0.6，[issue #1](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/1)）。还没在真机上跑过。0.2.3 起，Chef 1.4.x 和 1.5.x 都能用：MDL3 的回调不交给 Chef 的卡死看门狗。
-真机测过：MDL3 3.0.0-dev.29 和 dev.33，Chef 1.4.1 和 1.5.1，HUDdle 0.6.11，Treasure Radar 0.7.1n，BF5 击杀反馈 MDL3 版 2.0.1。
+**0.2.4**：也认得出 `local chef = ...` 在前 16 KB 之后的 Chef mod（NarrowHUD 1.0.6，[issue #1](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/1)）。0.2.3 起，Chef 1.4.x 和 1.5.x 都能用：MDL3 的回调不交给 Chef 的卡死看门狗。
+真机测过：MDL3 3.0.0-dev.29 和 dev.33，Chef 1.4.1 和 1.5.1，HUDdle 0.6.11，NarrowHUD 2.2.0，Treasure Radar 0.7.1n，BF5 击杀反馈 MDL3 版 2.0.1（0.2.4 在 MDL3 dev.33 + Chef 1.5.1 上）。NarrowHUD 1.0.6 本身没有拿到，只在测试里验证过。
 
-**0.2.4** also recognises a Chef mod whose `local chef = ...` comes after its first 16 KB (NarrowHUD 1.0.6, [issue #1](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/1)); it has not been run in the real game yet. From 0.2.3 on it works with Chef 1.4.x and 1.5.x: MDL3's callbacks are kept away from Chef's hang watchdog.
-Tested in the real game with MDL3 3.0.0-dev.29 and dev.33, Chef 1.4.1 and 1.5.1, HUDdle 0.6.11, Treasure Radar 0.7.1n and the MDL3 build of BF5 Hit and Kill Feedback 2.0.1.
+**0.2.4** also recognises a Chef mod whose `local chef = ...` comes after its first 16 KB (NarrowHUD 1.0.6, [issue #1](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/1)). From 0.2.3 on it works with Chef 1.4.x and 1.5.x: MDL3's callbacks are kept away from Chef's hang watchdog.
+Tested in the real game with MDL3 3.0.0-dev.29 and dev.33, Chef 1.4.1 and 1.5.1, HUDdle 0.6.11, NarrowHUD 2.2.0, Treasure Radar 0.7.1n and the MDL3 build of BF5 Hit and Kill Feedback 2.0.1 (0.2.4 with MDL3 dev.33 and Chef 1.5.1). NarrowHUD 1.0.6 itself was only checked in the tests.
 
 ## 文档 / Documents
 

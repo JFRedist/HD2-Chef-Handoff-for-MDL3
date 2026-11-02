@@ -74,7 +74,8 @@ Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次�
 多读的只有 addon，开销很小：作者的安装里多读了 2 个 MDL3 的 addon（约 470 KB）；去掉头行的 NarrowHUD 2.2.0（743 KB）在 Lua 5.1 里读完加查找约 7 毫秒。`chef_handoff.log` 的 `patch files read: ...` 那一行后面会多一段 `; N addon(s) read past the first 16 KB`。
 同时改了：Lua 开头注释里看门狗的版本（1.4.0 起，不是 1.5.0 起），`mod.json` 的说明（Arsenal 里显示的）也改了这一处，并加上“本 mod 放在最低优先级”。别的行为没有变。细节见 [`docs/chef-under-mdl3.md`](../docs/chef-under-mdl3.md) 的“0.2.4”一节。
 
-**还没有在真机上跑过。** NarrowHUD 1.0.6 本身没有拿到，是用去掉头行的 NarrowHUD 2.2.0 代替的：0.2.3 认不出，0.2.4 认得出。
+NarrowHUD 1.0.6 本身没有拿到，是用去掉头行的 NarrowHUD 2.2.0 代替的：0.2.3 认不出，0.2.4 认得出。
+**真机（0.2.4 + MDL3 3.0.0-dev.33 + Chef 1.5.1，带 NarrowHUD 2.2.0）：** 作者测好了。Treasure Radar 和 NarrowHUD 2.2.0 由 Chef 启动，BF5 反馈由 MDL3 启用，退出 `shutdown (clean)`；补丁扫描多读了 2 个 MDL3 的 addon，没有把它们认成 Chef 的。
 
 ## 安装
 
@@ -156,7 +157,7 @@ Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次�
 - 0.2.3（Chef 1.5.1，有日志）：作者说跑起来正常；Chef 没有收下 MDL3 的任何回调，MDL3 的更新每帧一次、在 Chef 后面；HUDdle、Treasure Radar 启动，退出 `shutdown (clean)`；MDL3 的 mod 库扫描正常。这一次约 1 分 45 秒。
 - 0.2.3 + **MDL3 3.0.0-dev.33**（Chef 1.5.1，有日志）：作者说 HUDdle、Treasure Radar、BF5 反馈都正常；日志和 dev.29 下一样（游戏的全局表 `getfenv(0)`，没有元表；Chef 没有收下 MDL3 的回调；`once a frame`；退出 `shutdown (clean)`）。更新到 dev.33 后的第一次启动里本 mod 没有运行，原因没找到，下一次起正常。
 - 一位玩家（MDL3 3.0.0-dev.33，837 个补丁文件，有日志）：MDL3 只看了 512 个补丁文件，没发现本 mod（当时放在 MDL3 和 Chef 之间），交接没有发生。所以第 4 步改成了最低优先级；改了以后的结果还没有回报。
-- 0.2.4：还没在真机上跑过。
+- 0.2.4 + MDL3 3.0.0-dev.33（Chef 1.5.1，带 NarrowHUD 2.2.0，有日志）：作者测好了；Chef 启动了 Treasure Radar 0.7.1 和 NarrowHUD 2.2.0，BF5 反馈由 MDL3 启用；`2 addon(s) read past the first 16 KB`（两个 MDL3 的 addon，没认成 Chef 的）；进了一局任务，约 3 分半，退出 `shutdown (clean)`。这次没有装 HUDdle。
 
 **模拟器**：在 Chef 自带的模拟器里，用我写的**假 MDL3 启动器**（代替 MDL3 的 boot）测过：启动器在 `init` 里启动 mod / 在 `boot` 里启动 mod（并先用普通 `require` 试一遍 Chef 的 mod）/
 同前但只留下 `package.loaded` / 更新链里有一次 3.6 秒的慢调用 / mod 打开文件时就把自己的 `render`、`shutdown` 放回去 / **MDL3 的沙箱（照 0.2.2 的真机日志做的）加一次慢调用** / 自己已经交接给 Chef。几种情况下 Chef 都按预期运行，假 MDL3 的回调每帧照常被调用，游戏自己的 `init` 没有被重复或跳过；用真实的 HUDdle 0.6.11 也试过，能启动。

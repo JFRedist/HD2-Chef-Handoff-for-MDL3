@@ -36,7 +36,7 @@
 - `chef_handoff.log`：`patch files read: ...` 后面多一段 `; N addon(s) read past the first 16 KB`。
 - Lua 开头注释里看门狗的版本改成 1.4.0 起（原来写 1.5.0 起）；`mod.json` 的说明也改了这一处，并加上“本 mod 放在最低优先级”。
 - 测试：自写 124 项；模拟器 86 项（加真实的 HUDdle 90 项），Chef 1.4.1 和 1.5.1 上都全过（在 Windows 11 上跑的）。用去掉头行的 NarrowHUD 2.2.0 试过：0.2.3 认不出，0.2.4 认得出。在作者自己的补丁文件上模拟，认出的 mod 和 0.2.3 一样。
-- 真机：还没跑过。
+- 真机（MDL3 3.0.0-dev.33，Chef 1.5.1）：作者测好了。Chef 启动了 Treasure Radar 0.7.1 和 NarrowHUD 2.2.0，BF5 反馈由 MDL3 启用，退出 `shutdown (clean)`；补丁扫描多读了 2 个 MDL3 的 addon，没有认成 Chef 的。NarrowHUD 1.0.6 本身没有拿到，只在测试里验证过。
 
 ### 0.2.3 — 2026-11-02
 - **在游戏真正的全局表上摘回调。** 0.2.2 的真机日志显示，MDL3 让每个 addon 在自己的沙箱里运行：addon 的 `_G` 不是游戏的全局表，`update`、`shutdown` 是 addon 自己的。0.2.1、0.2.2 在沙箱里摘，Chef 从游戏的全局表上照样拿到 MDL3 的 `update`、`shutdown`，MDL3 的更新一直在 Chef 的看门狗下面跑（1.4.1 和 1.5.x 都是）。0.2.3 在 `getfenv(0)`（Chef 的核心被 `require` 时拿到的那张表，里面要有引擎的 `stingray`）上用它自己的 `rawget`、`rawset` 摘下、放回，便条也放在那里；没有沙箱时和以前一样。

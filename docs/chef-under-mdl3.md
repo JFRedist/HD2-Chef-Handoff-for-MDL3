@@ -347,7 +347,13 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 **测试**：`tests/test_handoff.lua` 加了三个例子（124 项）：`local chef` 在 220 KB 数据之后（认出）、`local chef` 被 16 KB 那条线切开（认出）、16 KB 之后才有 `HD2-Requires` 行和缩进的 `local chef` 的 MDL3 addon（不认）。0.2.3 在新例子上失败 6 项；去掉“前 16 KB 的最后一行一起找”那一步，切开的那个例子失败。
 同一个版本里还改了：Lua 开头注释里“看门狗从 Chef 1.5.0 起”改成 1.4.0（见“更正：Chef 1.4.1 也是这样”），`mod.json` 的说明（Arsenal 里显示的那段）也改了这一处，并加了“本 mod 放在最低优先级”。别的行为没有变。
 
-**还没有在真机上验证**：0.2.4 还没在游戏里跑过；NarrowHUD 1.0.6 本身没有拿到，上面是用去掉头行的 2.2.0 代替的。
+**真机（2026-11-02 16:49，0.2.4 + MDL3 3.0.0-dev.33 + Chef 1.5.1，约 3 分半，进了一局任务）**：作者说测好了。这次装的是 NarrowHUD 2.2.0，没有 HUDdle。
+
+- `chef_handoff.log`：`chef_handoff 0.2.4 loaded`；`patch files read: 87 (5 addons, 2 made for Chef, 0 read errors) in 10 ms; 2 addon(s) read past the first 16 KB`（多读的是 HD2 Data Hub 和 First Person Camera，都没认成 Chef 的）；`made for Chef: mods/chef/treasure_radar mods/luka189/narrowhud`，两个都从 `package.loaded` 摘掉；游戏的全局表 `getfenv(0)`，`once a frame`。
+- `chef_loader.log`：`started by MDL3 chef_handoff 0.2.4`；`started mods/chef/treasure_radar 0.7.1`、`started mods/luka189/narrowhud 2.2.0`；认出任务世界（13966 个单位）；没有 `running the callbacks ...`，看门狗没有动作；退出 `shutdown (clean)`。
+- `MDL.log`：MDL3 也“启动”过 NarrowHUD（`managed`，它的头两行日志出现在 `MDL.log` 里），和 Treasure Radar 一样没报错，所以要靠摘掉 `package.loaded` 让 Chef 启动它。BF5 反馈被 MDL3 启用，注册了 51 个选项。
+
+**没有在真机上验证的**：NarrowHUD 1.0.6 本身（没有拿到；2.2.0 有 `HD2-Requires` 头行，0.2.3 也认得出），也就是“读完全文才认出”这条路在真机上只走过“没认出”的那一半（两个 MDL3 的 addon）。认出的那一半在自写测试和去掉头行的 2.2.0 上验证过。
 
 ## 按键冲突：MDL3 下运行、自己用 F9 的 mod（2026-11-02）
 

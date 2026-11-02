@@ -1,0 +1,66 @@
+# Publishes a GitHub Release with the mod-manager zip from dist/.
+#
+#   * push a tag that matches handoff/mod.json, e.g. `v0.2.0` (the release is made from the tagged commit), or
+#   * run it by hand from the Actions page and give the tag (the tag is created on the commit the run was started from).
+#
+# Before anything is published: the tests pass, and the zip in dist/ is byte for byte what tools/pack.py builds from the
+# source at this commit (the build is deterministic). The notes come from release-notes/<tag>.md.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag, e.g. v0.2.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tests
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lua5.1
+          bash tests/run_all.sh
+
+      - name: Check the tag and that dist/ is what the source builds
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          TAG="${INPUT_TAG:-$REF_NAME}"
+          VERSION=$(python3 -I -c "import json; print(json.load(open('handoff/mod.json'))['version'])")
+          [ "$TAG" = "v$VERSION" ] || { echo "the tag is $TAG but handoff/mod.json says version $VERSION" >&2; exit 1; }
+          test -f "release-notes/$TAG.md" || { echo "release-notes/$TAG.md is missing" >&2; exit 1; }
+          python3 -I tools/pack.py handoff/mod.json "$RUNNER_TEMP/rebuilt"
+          REBUILT=$(ls "$RUNNER_TEMP"/rebuilt/*.zip)
+          NAME=$(basename "$REBUILT")
+          cmp "dist/$NAME" "$REBUILT" || { echo "dist/$NAME is not what tools/pack.py builds from the source" >&2; exit 1; }
+          sha256sum "dist/$NAME"
+          {
+            echo "TAG=$TAG"
+            echo "VERSION=$VERSION"
+            echo "ZIP=dist/$NAME"
+          } >> "$GITHUB_ENV"
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then echo "the release $TAG exists already" >&2; exit 1; fi
+          gh release create "$TAG" "$ZIP" \
+            --title "Chef Hand-off for MDL3 $VERSION" \
+            --notes-file "release-notes/$TAG.md" \
+            --target "$GITHUB_SHA"

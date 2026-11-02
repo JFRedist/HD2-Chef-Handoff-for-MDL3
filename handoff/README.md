@@ -1,4 +1,4 @@
-# Chef Hand-off for MDL3 0.2.1
+# Chef Hand-off for MDL3 0.2.2
 
 让 **Chef Shared Loader**（以及只能在它上面运行的 mod，比如 **HUDdle**、**Treasure Radar**）和 **MDL3**（以及 BF5 反馈这类 MDL3 mod）在同一个游戏里一起工作。
 
@@ -33,16 +33,28 @@ Chef 1.5.0 起，这些回调**放在它的卡死看门狗下面**：一次调�
 0.2.0 在 1.5.x 上就会这样；1.4.1 没有这一条，所以 1.4.1 上一直正常。
 
 0.2.1 不再把这些回调交给 Chef：交接时先把它们从全局里摘下来，Chef 加载完再放回去，放在 Chef 自己的回调后面（Chef 的先，MDL3 的链后，游戏照常调用）。
-Chef 不再拥有、计时或终止 MDL3 的回调，所以不管 MDL3 的某次调用多久，Chef 的看门狗都不会判它卡死。Chef 自己的 mod 照常受看门狗保护。
+这样 Chef 不拥有、不计时、不终止 MDL3 的回调，不管 MDL3 的某次调用多久，Chef 的看门狗都不会判它卡死。Chef 自己的 mod 照常受看门狗保护。（真机上没有完全做到，见下一节。）
 Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次调用超过 0.5 秒 CPU 时间时，`chef_handoff.log` 会记一行 `took N ms of CPU time`，并且在交接前后各记一行调试钩子的状态（`debug hook before / after`），这些在排查时有用。
 
-**状态：** 在 Chef 自带的模拟器里，用真实的 Chef 1.5.1 复现了问题（0.2.0 下，对方更新链里一次 3.6 秒的调用被 `stopped by the hang watchdog: it ran over 3 s` 中止，接着 Chef 记 `switched off boot:... for this session: it hung`，整条链从此不再被调用），0.2.1 下不会；1.4.1 上两版都正常。
-**还没有在真机上用 1.5.x 试过。** 真实的 MDL3 为什么会有超过 3 秒的调用（或者别的什么让 Chef 判它卡死），我没有看到过 1.5.x 的日志，所以不知道。如果 0.2.1 在 1.5.x 上还是不行，请把 `chef_handoff.log`、`chef_loader.log` 和 `MDL.log` 发出来。
+**模拟器：** 在 Chef 自带的模拟器里，用真实的 Chef 1.5.1 复现了问题（0.2.0 下，对方更新链里一次 3.6 秒的调用被 `stopped by the hang watchdog: it ran over 3 s` 中止，接着 Chef 记 `switched off boot:... for this session: it hung`，整条链从此不再被调用），0.2.1 下不会；1.4.1 上两版都正常。
+真实的 MDL3 为什么会有超过 3 秒的调用（或者别的什么让 Chef 判它卡死），没有 0.2.0 + 1.5.x 的日志，仍然不知道。
+
+## 0.2.2 比 0.2.1 多了什么：0.2.1 在真机上的一个漏洞
+
+作者用 0.2.1 + Chef 1.5.1 在真机上跑了一局：HUDdle、Treasure Radar、BF5 反馈都正常，Chef 的看门狗开着，没有判谁卡死。但 `chef_loader.log` 里还是有 `running the callbacks the boot script in ...patch_89 set before it started me (2)`：Chef 仍然收下了 MDL3 的两个回调，这正是 0.2.1 要避免的。原因没有确定。
+
+能解释它的一个空当：0.2.1 在摘下回调和 `require` Chef 之间写了两行日志（两次打开文件）。如果 MDL3 在 mod 打开文件时会把自己的 `render`、`shutdown` 放回去（这是猜测，不是查到的），Chef 就正好看到两个。在模拟器里照这个样子做了一个假 MDL3（变体 G），真实的 Chef 1.5.1 在 0.2.1 下写出了和真机一模一样的那一行，假 MDL3 的 `shutdown` 跑了两次（Chef 跑一次，Chef 后面又跑一次）。
+
+0.2.2：
+
+- 摘下回调到 Chef 读完全局之间，只运行 `rawset` 和 `require`：日志和状态文件都挪到前面或后面。变体 G 下 Chef 不再收下任何回调，`shutdown` 只跑一次。
+- `chef_handoff.log` 多记几行，下次真机就能看出是怎么回事：加载时和交接前四个回调各是什么（地址和定义它的文件、行号）；`_G` 有没有元表（加载器守着全局时会有）、本 mod 是不是在全局表里运行、`require` 和 `package.loaders` 是谁的；Chef 加载后四个回调是什么，有没有哪个是刚摘下的那个又回来了；交接后 600 帧里 MDL3 的更新链跑了几次（每帧一次是正常的；两次说明 Chef 收下了它，也在跑它）。
+- 行为上别的都没变。**0.2.2 还没在真机上跑过。**
 
 ## 安装
 
-1. 你已经有：MDL3 和它的 mod（BF5 反馈）、Chef Shared Loader（1.2.0 以上；真机上测过 1.4.1，**1.5.x 要用 0.2.1 或更新的版本**）、HUDdle 等 Chef 的 mod。
-2. 把 `dist/Chef-Hand-off-for-MDL3-0.2.1.zip` 加进 Arsenal / HD2 Mod Manager 并启用。
+1. 你已经有：MDL3 和它的 mod（BF5 反馈）、Chef Shared Loader（1.2.0 以上；真机上测过 1.4.1 和 1.5.1，**1.5.x 要用 0.2.1 或更新的版本**）、HUDdle 等 Chef 的 mod。
+2. 把 `dist/Chef-Hand-off-for-MDL3-0.2.2.zip` 加进 Arsenal / HD2 Mod Manager 并启用。
 3. **优先级：MDL3 的优先级要比 Chef 高**（说的是优先级，不是"先加载"：优先级高的那个启动器，游戏才会运行它）。其余 mod 的顺序没关系。
    Chef 和 HUDdle 的说明都要求 Chef 的优先级最高，这里正相反：游戏运行的 boot 必须是 MDL3 的。
    在 Arsenal 里怎么摆，看它的设置：
@@ -58,8 +70,8 @@ Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次�
 
 | 看哪里 | 成功的样子 |
 |---|---|
-| `%APPDATA%\Arrowhead\Helldivers2\chef_handoff.log` | 最后一行是 `Chef Shared Loader 1.4.x started` |
-| `chef_loader.log`（同一个文件夹） | 有 `started by MDL3 chef_handoff 0.2.1, which handed off to me`，和 `started mods/rosensterner/minimal_hud`、`started mods/chef/treasure_radar`（有 Treasure Radar 的话） |
+| `%APPDATA%\Arrowhead\Helldivers2\chef_handoff.log` | 有一行 `Chef Shared Loader 1.x.x started`；约 10 秒后还有一行 `the game's update chain ran 600 times in Chef's first 600 updates: once a frame` |
+| `chef_loader.log`（同一个文件夹） | 有 `started by MDL3 chef_handoff 0.2.2, which handed off to me`，没有 `running the callbacks ... set before it started me`，和 `started mods/rosensterner/minimal_hud`、`started mods/chef/treasure_radar`（有 Treasure Radar 的话） |
 | `chef_handoff.log` 的中段 | 真机上是这样的：`patch files read: 91 (4 addons, 2 made for Chef, 0 read errors) in 5 ms`、`made for Chef: mods/chef/treasure_radar mods/rosensterner/minimal_hud`、`taken off package.loaded, so that Chef starts them: mods/chef/treasure_radar`。HUDdle 不在最后一行里是正常的：它在 MDL3 里加载就失败了，本来就不在 `package.loaded` 里 |
 | 游戏里 | 任务中出现 HUDdle 的 HUD；按 F9 出 Chef 的菜单；BF5 反馈照常 |
 
@@ -88,12 +100,14 @@ Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次�
 `MDL.log` 每次启动都会被覆盖：闪退后先把它拷出来，再重开游戏。
 `chef_handoff.log` 开头会列出 MDL3 给 mod 的那些全局表（`CowboyBingusModLoader`、`MDL3`、`HD2Data` ……）里有什么，MDL3 换了版本之后，这能看出它变了什么。
 交接那几行里的 `debug hook before / after` 是交接前后这个线程上有没有调试钩子（Chef 的看门狗和 MDL3 自己的预算限制都可能用到），`took N ms of CPU time` 是 MDL3 的某次调用花了多久。
+`the game's callbacks ...` 三行是四个回调在加载时、交接前、Chef 加载后各是什么（`(the one taken off)` 表示刚摘下的那个又回到了全局上），`around the globals` 是 `_G` 的元表和 `require` 的来历，`update chain ran N times` 是交接后 MDL3 的更新链每帧跑几次。
 
 ## 可能的副作用
 
 - Chef 启动时（第 6 秒左右，一般在标题画面）会有几十毫秒的卡顿。
 - Chef 会把所有带 `HD2-Addon` 头的 mod 都看一遍，已经由 MDL3 启动的它会跳过（靠 `package.loaded` 和 MDL3 登记的列表）；真机日志里能看到 `hd2_data_hub` 这类被跳过。BF5 反馈的 Lua 有 6 MB，Chef 不读超过 4 MB 的 Lua。
   如果哪个 MDL3 的 mod 被 Chef 再启动了一份，`chef_loader.log` 里会有 `started mods/<作者>/<名字>`：在 Chef 的 F9 菜单里把它关掉，并告诉作者。
+- MDL3 设置里所有 mod 的分类都显示“未知”（名字正常）：0.2.1 那次真机出现过。那次 MDL3 自己读文件的服务在启动时就坏了（`MDL.log` 里每个 `sys list`、`sys tree` 都是 `attempt to index upvalue 'kernel' (a nil value)`），比交接早 6 秒，看起来和本 mod 无关，但还没有做对照（不启用本 mod 启动几次看看）。见 [`docs/chef-under-mdl3.md`](../docs/chef-under-mdl3.md)。
 - Chef 的 mod（HUDdle 之类）在 MDL3 自己的菜单和日志里会显示错误：`MDL.log` 里 HUDdle 是 `enable failed ... attempt to call field 'time' (a nil value)`，因为 MDL3 给它的不是 Chef，没有 `time`。这是 MDL3 眼里的失败，实际是 Chef 在运行它们，游戏里能正常用（评论里也有人这样说，作者转述）。本 mod 不去改 MDL3 怎么显示它们。
 
 ## 卸载
@@ -102,14 +116,16 @@ Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次�
 
 ## 验证到了哪一步
 
-**真机**（作者的游戏：MDL3 3.0.0-dev.29，Chef 1.4.1，HUDdle 0.6.11，BF5 击杀反馈 MDL3 版 2.0.1，Treasure Radar 0.7.1n）：
+**真机**（作者的游戏：MDL3 3.0.0-dev.29，Chef 1.4.1 和 1.5.1，HUDdle 0.6.11，BF5 击杀反馈 MDL3 版 2.0.1，Treasure Radar 0.7.1n）：
 
 - 0.1.0（有日志）：交接成功；HUDdle 正常，一局约 8 分钟没有错误；正常结算回飞船没问题；BF5 反馈被 MDL3 启用；Treasure Radar 被 Chef 跳过（0.2.0 修的就是这个）；任务中按 ESC 回飞船闪退过一次，没有找到原因，之后没有再出现。
 - 0.2.0（Chef 1.4.1）：作者的试玩报告说 Treasure Radar 起来了，ESC 回飞船没有闪退，BF5 反馈正常（Chef 的日志没传）。`chef_handoff.log` 证实补丁扫描在真机上起作用：读了 91 个补丁文件，认出 Treasure Radar 和 HUDdle 是做给 Chef 的，把 Treasure Radar 从 `package.loaded` 里摘掉，然后 Chef 1.4.1 启动。
+- 0.2.1（Chef 1.5.1，有日志）：HUDdle、Treasure Radar 0.7.1、BF5 反馈都正常；看门狗开着，没有 `hung`、`switched off`；退出 `shutdown (clean)`。Chef 仍然收下了两个回调（见上面 0.2.2 一节）。那次 MDL3 里分类全是“未知”（见“可能的副作用”）。
+- 0.2.2：还没在真机上跑过。
 
 **模拟器**：在 Chef 自带的模拟器里，用我写的**假 MDL3 启动器**（代替 MDL3 的 boot）测过：启动器在 `init` 里启动 mod / 在 `boot` 里启动 mod（并先用普通 `require` 试一遍 Chef 的 mod）/
-同前但只留下 `package.loaded`（真实 MDL3 的样子）/ 更新链里有一次 3.6 秒的慢调用 / 自己已经交接给 Chef。几种情况下 Chef 都按预期运行，假 MDL3 的回调每帧照常被调用，游戏自己的 `init` 没有被重复或跳过；用真实的 HUDdle 0.6.11 也试过，能启动。
-Chef 1.4.1 和 1.5.1 上都是这样（0.2.1）。另外试了对方自己用调试钩子的三种情况（每帧设置并还原 / 设置了不还原 / 清除），Chef 1.5.1 上也都没有出问题。
+同前但只留下 `package.loaded`（真实 MDL3 的样子）/ 更新链里有一次 3.6 秒的慢调用 / mod 打开文件时就把自己的 `render`、`shutdown` 放回去 / 自己已经交接给 Chef。几种情况下 Chef 都按预期运行，假 MDL3 的回调每帧照常被调用，游戏自己的 `init` 没有被重复或跳过；用真实的 HUDdle 0.6.11 也试过，能启动。
+Chef 1.4.1 和 1.5.1 上都是这样（0.2.2）。另外试了对方自己用调试钩子的三种情况（每帧设置并还原 / 设置了不还原 / 清除），Chef 1.5.1 上也都没有出问题。
 假启动器只是照真机日志和 BF5 的 MDL3 版代码推出来的样子，不是真的 MDL3。
 
 只在 MDL3 3.0.0-dev.29（"protected preview"）上测过；MDL3 以后怎么启动 mod 如果变了，上面"出问题时"的文件能看出来。

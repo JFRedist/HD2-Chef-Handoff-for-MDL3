@@ -7,7 +7,7 @@
 **English.** Helldivers 2 runs only one `boot`, so Chef Shared Loader and MDL3 normally cannot both work, and Chef-only mods (HUDdle, Treasure Radar) have no MDL3 version.
 This addon is started by MDL3 and, 6 seconds into the game, hands the game over to the real Chef with the hand-off that Chef's own documentation describes for other loaders.
 MDL3 keeps running its mods; Chef runs the Chef mods. No code of Chef, HUDdle or MDL3 is included.
-Download `Chef-Hand-off-for-MDL3-0.2.3.zip` from the Releases page (the same file is in [`dist/`](dist/Chef-Hand-off-for-MDL3-0.2.3.zip)), add it to your mod manager, enable it, and give **MDL3 a higher priority than Chef**.
+Download `Chef-Hand-off-for-MDL3-0.2.3.zip` from the Releases page (the same file is in [`dist/`](dist/Chef-Hand-off-for-MDL3-0.2.3.zip)), add it to your mod manager, enable it, and give **MDL3 a higher priority than Chef**, and put this mod between them.
 **For Chef Shared Loader 1.5.x use 0.2.3**: Chef runs the callbacks it is handed (MDL3's update and shutdown) under its hang watchdog, which stops them when one call takes over 3 s.
 0.2.1 and 0.2.2 were meant to keep them out of Chef's hands, but MDL3 runs every addon in a sandbox of its own, and they only took the callbacks off that sandbox (the 0.2.2 log showed it); 0.2.3 takes them off the game's own global table.
 Tested by the repository owner in the real game (MDL3 3.0.0-dev.29; Chef 1.4.1 with 0.1.0 and 0.2.0, Chef 1.5.1 with 0.2.1, 0.2.2 and 0.2.3: HUDdle, Treasure Radar and the BF5 feedback all ran). With 0.2.3 Chef 1.5.1 kept none of MDL3's callbacks, and MDL3's update ran once a frame behind Chef's, outside its watchdog. The documentation is in Chinese; the Lua source is commented in English.
@@ -55,7 +55,8 @@ ESC 那次闪退没有找到原因，0.2.0 也没有做任何针对它的改动�
 1. 你已经有 MDL3、Chef Shared Loader（1.2.0 以上；**1.5.x 请用本 mod 的 0.2.3**）和要用的 mod。
 2. 从本仓库的 Releases 页下载 `Chef-Hand-off-for-MDL3-0.2.3.zip`（[`dist/`](dist/Chef-Hand-off-for-MDL3-0.2.3.zip) 里是同一个文件），加进 Arsenal / HD2 Mod Manager 并启用。
 3. **MDL3 的优先级要比 Chef 高**（游戏运行的 boot 必须是 MDL3 的）。Arsenal 里：设置是 *First mod highest priority* 就把 MDL3 放在 Chef 上面，是 *Last mod highest priority* 就放在下面。这和 Chef、HUDdle 的说明（要求 Chef 最高）相反。
-4. Purge，再 Deploy。启动游戏，在标题画面停 10 秒以上，再进一局任务。
+4. 建议把本mod放在MDL3和Chef之间。
+5. Purge，再 Deploy。启动游戏，在标题画面停 10 秒以上，再进一局任务。
 
 ## 出问题时
 

@@ -1,9 +1,23 @@
 -- Runs handoff/chef_handoff.lua in a small fake game and checks what it does and, as important, what it leaves alone.
 --   lua5.1 tests/test_handoff.lua            (from the repository root)
 -- The real Chef is exercised by tests/handoff_sim.sh; this one is the quick check of the addon's own logic.
+local WINDOWS = package.config:sub(1, 1) == '\\'  -- (os.execute runs cmd there, not sh)
 local ADDON = os.getenv('HANDOFF_ADDON') or 'handoff/chef_handoff.lua'
-local OUT = os.getenv('HANDOFF_TEST_OUT') or '/tmp/bfv_handoff_test'
+local OUT = os.getenv('HANDOFF_TEST_OUT') or (WINDOWS and (os.getenv('TEMP') or '.') .. '\\bfv_handoff_test' or '/tmp/bfv_handoff_test')
 local CORE = 'mods/chef_shared_loader/core_1'
+local NULL = WINDOWS and 'NUL' or '/dev/null'
+
+-- an empty folder; on Windows also the addon's folder in it (the backslashes it glues on make real folders there, and
+-- io.open makes none: elsewhere they are part of a file's name)
+local function fresh(dir, sub)
+  if WINDOWS then
+    local d = dir:gsub('/', '\\')
+    os.execute('if exist "' .. d .. '" rmdir /s /q "' .. d .. '"')
+    os.execute('mkdir "' .. d .. (sub and '\\' .. sub or '') .. '"')
+  else
+    os.execute('rm -rf "' .. dir .. '" && mkdir -p "' .. dir .. '"')
+  end
+end
 
 local checks, failures = 0, 0
 local function slurp(path) local f = io.open(path, 'r'); if not f then return nil end; local t = f:read('*a'); f:close(); return t end
@@ -25,7 +39,7 @@ local function lines(text) local n = 0; for _ in (text or ''):gmatch('[^\n]+') d
 local function game(opts)
   opts = opts or {}
   local dir = OUT .. '/' .. opts.name
-  os.execute('rm -rf "' .. dir .. '" && mkdir -p "' .. dir .. '"')
+  fresh(dir, 'A\\Arrowhead\\Helldivers2')
   local base = dir .. '/A'                 -- APPDATA; the folder names are glued on with backslashes, as on Windows: on this
                                            -- machine the files come out as 'A\Arrowhead\Helldivers2\<name>' inside dir
   local G = { calls = {}, updates = 0, last_args = nil, required = {}, t = 0, order = {}, record = false, cpu = 0 }
@@ -149,7 +163,7 @@ end
 local function sandbox_game(opts)
   opts = opts or {}
   local dir = OUT .. '/' .. opts.name
-  os.execute('rm -rf "' .. dir .. '" && mkdir -p "' .. dir .. '"')
+  fresh(dir, 'A\\Arrowhead\\Helldivers2')
   local base = dir .. '/A'
   local G = { t = 0, order = {}, record = false, mdl3_updates = 0, required = {} }
   local GT = {}
@@ -526,8 +540,8 @@ check(#G.required == 1 and G.updates == 480, 'and hooked nothing a second time')
 
 print('== Chef addons that MDL3 has already "started" (Treasure Radar in the first real run)')
 local FIX = OUT .. '/fixtures'
-os.execute('rm -rf "' .. FIX .. '" && mkdir -p "' .. FIX .. '"')
-assert(os.execute('python3 -I tests/fixtures/handoff/make_patches.py "' .. FIX .. '" > /dev/null') == 0, 'make_patches.py failed')
+fresh(FIX)
+assert(os.execute('python3 -I tests/fixtures/handoff/make_patches.py "' .. FIX .. '" > ' .. NULL) == 0, 'make_patches.py failed')
 local ALL = { 'radar_like', 'probe_like', 'mdl3_like', 'late_chef', 'huge_chef', 'filler_0', 'garbage_chef', 'comment_mention' }
 local function marked()
   local t = {}

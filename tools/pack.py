@@ -112,7 +112,7 @@ def build(spec_path, out, header=None):
     if spec.get('thumbnail'):
         shutil.copy(os.path.join(base, spec['thumbnail']), os.path.join(stage, 'thumbnail.png'))
         manifest['IconPath'] = 'thumbnail.png'
-    with open(os.path.join(stage, 'manifest.json'), 'w', encoding='utf-8') as f:
+    with open(os.path.join(stage, 'manifest.json'), 'w', encoding='utf-8', newline='\n') as f:   # (LF on Windows too)
         json.dump(manifest, f, indent=2, ensure_ascii=False)
         f.write('\n')
 

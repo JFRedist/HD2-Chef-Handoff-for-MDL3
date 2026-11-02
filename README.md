@@ -63,6 +63,7 @@ ESC 那次闪退没有找到原因，0.2.0 也没有做任何针对它的改动�
 | `handoff/` | **交接 addon**：`chef_handoff.lua`、`mod.json`、使用说明 |
 | `dist/` | 打好的 mod 管理器 zip：`Chef-Hand-off-for-MDL3-0.2.0.zip`（与源码逐字节对应，构建是确定性的）。同一个文件在本仓库的 Releases 页 |
 | `docs/chef-under-mdl3.md` | 在 MDL3 下运行 Chef 和 HUDdle：问题、交接办法、怎么认出做给 Chef 的 mod、三次真机结果、验证、风险 |
+| `docs/nexus-page.md` | Nexus Mods 页面的文字：名称、摘要、BBCode 描述（英文，带简体中文折叠块）、文件说明、更新说明、发布前检查 |
 | `docs/chef-feasibility.md`、`docs/probe-run-1.md` | 已放弃的研究：BF5 击杀反馈的 Chef 版（见下） |
 | `CHANGELOG.md`、`LICENSE` | 版本记录；MIT 许可证 |
 | `.github/workflows/release.yml`、`release-notes/` | 发布：见下 |

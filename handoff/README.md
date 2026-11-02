@@ -75,8 +75,8 @@ Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次�
    在 Arsenal 里怎么摆，看它的设置：
    - **First mod highest priority**（第一个优先级最高）：列表越靠上优先级越高，MDL3 放在 Chef **上面**。
    - **Last mod highest priority**（最后一个优先级最高）：列表越靠下优先级越高，MDL3 放在 Chef **下面**。
-   - 拿不准的话：你原来把 Chef 放在"最高优先级"的那个位置；现在把 MDL3 放到那个位置，Chef 挪到它附近，中间放本 mod（下一步）。
-4. 建议把本 mod 放在 MDL3 和 Chef 之间。
+   - 拿不准的话：你原来把 Chef 放在"最高优先级"的那个位置；现在把 MDL3 放到那个位置，Chef 挪到它附近，本 mod 放到另一头（下一步）。
+4. **本 mod 放在最低优先级**（最先部署，它的补丁编号就最小）。它没有 boot，放在哪里都不影响它运行；但 MDL3 3.0.0-dev.33 在一位玩家那里只看了前 512 个补丁文件，mod 多的时候，部署得晚的 addon 它发现不了，也就不启动（见下面“不看日志”那张表）。作者自己的安装就是这样摆的（本 mod 在 `patch_0`）。原来这里建议放在 MDL3 和 Chef 之间，mod 多时那里正好在 512 之后。
 5. **Purge**，再 **Deploy**。
 6. 启动游戏，在标题画面停 10 秒以上，再进一局任务。
 
@@ -96,6 +96,7 @@ Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次�
 | 现象 | 多半是 |
 |---|---|
 | BF5 反馈（MDL3）正常，HUDdle 没有 | MDL3 的优先级是对的，交接没成功：看 `chef_handoff.log` |
+| 同上，而且没有 `chef_handoff.log`；`MDL.log` 开头写着 `discovery ... in 512 archive(s)`，下面没有 `mods/jfredist/chef_handoff` 那一行 | mod 太多，本 mod 排得太靠后：MDL3 3.0.0-dev.33 只看了前 512 个补丁文件，没发现它，也就没启动它。把本 mod 放到最低优先级，Purge 再 Deploy。同样排在后面的 MDL3 mod 也不会运行 |
 | HUDdle 正常，BF5 反馈（MDL3）没有（也没有 `chef_handoff.log`） | Chef 的优先级还是高的（顺序摆反了）：把 MDL3 放到更高优先级，Purge 再 Deploy |
 | 两个都没有 | 看 `chef_handoff.log` 和 `chef_loader.log` |
 | 按 F9 时 Chef 的菜单和某个 mod 自己的菜单一起出来 | 按键冲突，见下面“可能的副作用”：把 Chef 的菜单键改到别的键 |
@@ -105,7 +106,7 @@ Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次�
 
 | `chef_handoff.log` 里 | 意思 |
 |---|---|
-| 文件不存在 | MDL3 没有运行，或者没有启动这个 mod：多半是 Chef 的优先级更高（上一节），也可能这个 mod 没有启用或没有部署 |
+| 文件不存在 | MDL3 没有运行，或者没有启动这个 mod：多半是 Chef 的优先级更高（上一节），也可能这个 mod 没有启用或没有部署，或者 mod 太多、它排得太靠后（`MDL.log` 开头 `in 512 archive(s)`，上一节）。`MDL.log` 里有 `mods/jfredist/chef_handoff: enabled` 却还是没有这个文件的，作者遇到过一次（更新到 MDL3 dev.33 后的第一次启动），原因没找到，再启动一次就好了 |
 | `Chef Shared Loader ... started` | 成功 |
 | `Chef Shared Loader is not installed` | 游戏里找不到 Chef 的核心：Chef 没装、没部署，或者被禁用了 |
 | `Chef Shared Loader is running already` | Chef 已经在运行（MDL3 自己交接了，或者 Chef 排在最上面），本 mod 什么也没做 |
@@ -136,20 +137,22 @@ Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次�
 
 ## 验证到了哪一步
 
-**真机**（作者的游戏：MDL3 3.0.0-dev.29，Chef 1.4.1 和 1.5.1，HUDdle 0.6.11，BF5 击杀反馈 MDL3 版 2.0.1，Treasure Radar 0.7.1n）：
+**真机**（作者的游戏：MDL3 3.0.0-dev.29 和 3.0.0-dev.33，Chef 1.4.1 和 1.5.1，HUDdle 0.6.11，BF5 击杀反馈 MDL3 版 2.0.1，Treasure Radar 0.7.1n）：
 
 - 0.1.0（有日志）：交接成功；HUDdle 正常，一局约 8 分钟没有错误；正常结算回飞船没问题；BF5 反馈被 MDL3 启用；Treasure Radar 被 Chef 跳过（0.2.0 修的就是这个）；任务中按 ESC 回飞船闪退过一次，没有找到原因，之后没有再出现。
 - 0.2.0（Chef 1.4.1）：作者的试玩报告说 Treasure Radar 起来了，ESC 回飞船没有闪退，BF5 反馈正常（Chef 的日志没传）。`chef_handoff.log` 证实补丁扫描在真机上起作用：读了 91 个补丁文件，认出 Treasure Radar 和 HUDdle 是做给 Chef 的，把 Treasure Radar 从 `package.loaded` 里摘掉，然后 Chef 1.4.1 启动。
 - 0.2.1（Chef 1.5.1，有日志）：HUDdle、Treasure Radar 0.7.1、BF5 反馈都正常；看门狗开着，没有 `hung`、`switched off`；退出 `shutdown (clean)`。Chef 仍然收下了两个回调。那次 MDL3 里分类全是“未知”（见“可能的副作用”）。
 - 0.2.2（Chef 1.5.1，有日志）：同样都正常，Chef 同样收下两个；日志显示了 MDL3 的沙箱（见上面 0.2.3 一节）。MDL3 的 mod 库扫描这次正常。
 - 0.2.3（Chef 1.5.1，有日志）：作者说跑起来正常；Chef 没有收下 MDL3 的任何回调，MDL3 的更新每帧一次、在 Chef 后面；HUDdle、Treasure Radar 启动，退出 `shutdown (clean)`；MDL3 的 mod 库扫描正常。这一次约 1 分 45 秒。
+- 0.2.3 + **MDL3 3.0.0-dev.33**（Chef 1.5.1，有日志）：作者说 HUDdle、Treasure Radar、BF5 反馈都正常；日志和 dev.29 下一样（游戏的全局表 `getfenv(0)`，没有元表；Chef 没有收下 MDL3 的回调；`once a frame`；退出 `shutdown (clean)`）。更新到 dev.33 后的第一次启动里本 mod 没有运行，原因没找到，下一次起正常。
+- 一位玩家（MDL3 3.0.0-dev.33，837 个补丁文件，有日志）：MDL3 只看了 512 个补丁文件，没发现本 mod（当时放在 MDL3 和 Chef 之间），交接没有发生。所以第 4 步改成了最低优先级；改了以后的结果还没有回报。
 
 **模拟器**：在 Chef 自带的模拟器里，用我写的**假 MDL3 启动器**（代替 MDL3 的 boot）测过：启动器在 `init` 里启动 mod / 在 `boot` 里启动 mod（并先用普通 `require` 试一遍 Chef 的 mod）/
 同前但只留下 `package.loaded` / 更新链里有一次 3.6 秒的慢调用 / mod 打开文件时就把自己的 `render`、`shutdown` 放回去 / **MDL3 的沙箱（照 0.2.2 的真机日志做的）加一次慢调用** / 自己已经交接给 Chef。几种情况下 Chef 都按预期运行，假 MDL3 的回调每帧照常被调用，游戏自己的 `init` 没有被重复或跳过；用真实的 HUDdle 0.6.11 也试过，能启动。
 Chef 1.4.1 和 1.5.1 上都是这样（0.2.3）。另外试了对方自己用调试钩子的三种情况（每帧设置并还原 / 设置了不还原 / 清除），Chef 1.5.1 上也都没有出问题。
 假启动器只是照真机日志和 BF5 的 MDL3 版代码推出来的样子，不是真的 MDL3；沙箱那一个和 0.2.2 的真机日志逐行对得上，但 MDL3 的沙箱可能还有日志没显示出来的地方。
 
-只在 MDL3 3.0.0-dev.29（"protected preview"）上测过；MDL3 以后怎么启动 mod 如果变了，上面"出问题时"的文件能看出来。
+在 MDL3 3.0.0-dev.29 和 3.0.0-dev.33（都是 "protected preview"）上测过；MDL3 以后怎么启动 mod 如果变了，上面"出问题时"的文件能看出来。
 详细见 [`docs/chef-under-mdl3.md`](../docs/chef-under-mdl3.md)。
 
 ## 许可

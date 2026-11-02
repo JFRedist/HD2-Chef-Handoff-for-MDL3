@@ -294,6 +294,36 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 **结论**：在真机上，0.2.3 让 MDL3 的回调离开了 Chef 的手：Chef 不再收下它们，MDL3 的更新在 Chef 后面、它的看门狗外面每帧运行一次。
 **没有在真机上验证的**：看门狗真的碰上 MDL3 一次超过 3 秒的调用时会怎样（这台机器上没有这种调用；模拟器的变体 H 里 0.2.3 下没事）；更长的运行（这一次约 1 分 45 秒，任务里约半分钟）。
 
+## 第七次真机结果（2026-11-02，0.2.3 + MDL3 3.0.0-dev.33 + Chef 1.5.1）
+
+作者在 Arsenal 里把 MDL3 换成 3.0.0-dev.33（HD2 Data Hub 仍是 0.3.0，本地组件 `mdl_native_bridge.dll` 仍是 0.4.5），别的没变，启动了两次。
+补丁的位置：本 mod 在 `patch_0`（最低优先级），Chef 的启动桩在 `patch_86`，MDL3 的 boot 在 `patch_87`，Data Hub 在 `patch_88`；Lua 那个包（`9ba626afa44a3aa3`）一共 89 个补丁文件，`MDL.log` 里的 `in 89 archive(s)` 数的就是它们。
+
+**第二次（16:06，约 2 分钟，进了一局任务）：正常。** 作者：HUDdle、Treasure Radar、BF5 反馈都正常。
+
+- `chef_handoff.log` 和 dev.29 下一样：`the game's global table: getfenv(0) (this addon's _G is a sandbox of its own, not the global table)`，`metatable of the global table: none`；交接前游戏全局表上是 MDL3 的回调（`render` 这次是 First Person Camera 链上去的那个），Chef 加载后是 Chef 的四个；`once a frame`。`patch files read: 89 (5 addons, 2 made for Chef, 0 read errors) in 7 ms`。
+- `chef_loader.log`：`start-up: started by the boot in 9ba626afa44a3aa3.patch_87 (MDL3 3.0.0-dev.33 game boot (PUC Lua 5.1, protected preview)), which handed off to me`；没有 `running the callbacks ...`；启动了 Treasure Radar 0.7.1 和 HUDdle 0.6.11；看门狗开着，没有动作；退出 `shutdown (clean)`。
+- `MDL.log`：和 dev.29 一样，每个 addon 都是 `enabled (deployed addon, managed by MDL)`，HUDdle 是 `load failed (managed): ... attempt to call field 'time' (a nil value)`（MDL3 用 `require` 启动它，`...` 只是模块名这个字符串，`chef.time` 是 nil），`CowboyBingusModLoader.modules` 里是 `managed` 一类的状态。
+
+**第一次（15:49，更新后的第一次启动，约 3 分半）：本 mod 没有运行。**
+
+- `MDL.log` 里有 `mods/jfredist/chef_handoff: enabled (deployed addon, managed by MDL)` 和 `addon mods/jfredist/chef_handoff: managed`，可是 `chef_handoff.log` 一行都没写（本 mod 一加载就会重写这个文件），`chef_handoff_state.txt` 没变，`chef_loader.log` 里没有这次启动：Chef 没起来。
+- 两次启动的 `MDL3.log`，除了时间，逐行一样；`MDL.log` 也看不出区别。磁盘上别处也没有这次写的 `chef_handoff.log`。
+- 原因没找到。dev.33 的说明里提到，更新后的第一次启动 MDL3 可能要安装自己的组件、要求重开游戏，但这次的日志里没有看到那样的迹象。之后没有再出现。
+
+## MDL3 dev.33 只看了 512 个补丁文件（一位玩家的日志，2026-11-02）
+
+一位玩家报告交接不工作，猜的原因是“本 mod 不在 MDL3 允许的 managed addon 目录里，`hd2arsenal_mods` 也不是 MDL3 的 allowed roots，MDL3 读不了它”。他传了一份 `MDL.log`（MDL3 3.0.0-dev.33）和一份 `chef_loader.log`（早 20 分钟的另一次启动）。
+
+- `MDL.log` 第 9 行：`coordinator: discovery 3 declared entries in 512 archive(s)`。MDL3 认出的 addon 只有三个：driver_hud、BF5 反馈、aggro_counter（后者 `load failed`）。**没有本 mod。**
+- 那份 `chef_loader.log` 是 Chef 在最上面的一次（`started by my start-up stub`，本 mod 当时还没部署）：`found 8 addon(s) ... in 837 patch files`，8 个 addon 在 `patch_99`、`493`、`515`、`543`、`546`、`596`、`640`、`790`。MDL3 认出的正好是 512 以内的两个（aggro_counter 在 99，driver_hud 在 493），512 以后的六个一个也没认出来。
+- 所以看起来 MDL3 dev.33 只看前 512 个补丁文件（Lua 那个包的，按编号），部署得晚、编号在 511 以后的 addon 它发现不了，也就不启动。本 mod 照原来的建议放在 MDL3 和 Chef 之间，mod 多的时候编号正好在最后面。
+- `sys path outside allowed roots`：那份日志里有 176 行 `sys tree ...` 和读图标的失败，都是 MDL3 的模组库去读 Arsenal 的 mod 文件夹（他放在游戏目录下的 `hd2arsenal_mods`），外加几个 `%LOCALAPPDATA%` 下的 `mkdir`。这些只影响 MDL3 设置里的列表和图标：BF5 反馈的文件夹同样失败，它照样 `enabled (deployed addon, managed by MDL)`。部署好的 addon 是从补丁文件里启动的，不经过这些文件夹。
+
+**限制**：只有这一份日志；两份日志不是同一次启动，中间如果重新部署过，编号可能有变化（在更高优先级加 mod 只会加在后面，不改前面的编号）。512 是不是 MDL3 固定的上限，要等 MDL3 的作者确认。
+
+**改法**：本 mod 没有 boot，放在哪里都不影响它运行，所以安装说明改成“本 mod 放在最低优先级”（最先部署，编号最小）。作者自己的安装本来就是这样（`patch_0`，第七次真机结果）。别的 MDL3 mod 排在 511 以后也会遇到同样的事，这不是本 mod 能修的。
+
 ## 按键冲突：MDL3 下运行、自己用 F9 的 mod（2026-11-02）
 
 作者装了 **First Person Camera by Webbox**（Nexus 17827，Lua 里是 `First Person Camera 1.0.190-release`，资源 `mods/webbox/first_person_prototype`）之后，看到两件事：
@@ -334,7 +364,9 @@ Chef 的那一行：`package.loaded` 里有它，Chef 就不再启动它（`star
 - **看门狗真的碰上 MDL3 的慢调用时**：真机上没有出现过超过 3 秒的调用；0.2.3 下 MDL3 的更新已经不在看门狗下面（第六次真机结果），模拟器里慢调用没事。
 - **MDL3 里分类全是“未知”**：出现过一次，下一次就正常了；没有做过不启用交接的对照。见“第四次”“第五次真机结果”。
 - **ESC 闪退的原因。** 见上。
-- **别的 MDL3 版本。** 只在 MDL3 3.0.0-dev.29（"protected preview"）上测过。MDL3 以后怎么启动 addon、给 addon 什么全局，可能会变；`chef_handoff.log` 开头列出的全局表能看出变化。
+- **别的 MDL3 版本。** 在 MDL3 3.0.0-dev.29 和 3.0.0-dev.33（都是 "protected preview"）上测过。MDL3 以后怎么启动 addon、给 addon 什么全局，可能会变；`chef_handoff.log` 开头列出的全局表能看出变化。
+- **MDL3 dev.33 的 512 个补丁文件**：是不是固定上限，按什么顺序数；那位玩家把本 mod 改到最低优先级以后能不能用。见“MDL3 dev.33 只看了 512 个补丁文件”。
+- **更新到 dev.33 后第一次启动时本 mod 为什么没运行。** 见“第七次真机结果”。
 - **别的 Chef mod。** 真机上只有 HUDdle 0.6.11 和 Treasure Radar 0.7.1n。其它 Chef mod 只在模拟器里用替身测过。
 - **更长的运行。** 我手上带交接的真机日志里，最长一次约 12 分钟（一局任务，0.1.0）；0.2.3 只有一次约 1 分 45 秒的。
 - **真实的 MDL3 为什么会有超过 3 秒的调用**（评论里 1.5.1 判卡死的原因）：没有 0.2.0 + 1.5.x 的日志。0.2.1 那次 Chef 没有判卡死，`chef_handoff.log` 也没有记到超过 0.5 秒的调用。

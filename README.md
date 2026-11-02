@@ -7,14 +7,14 @@
 **English.** Helldivers 2 runs only one `boot`, so Chef Shared Loader and MDL3 normally cannot both work, and Chef-only mods (HUDdle, Treasure Radar) have no MDL3 version.
 This addon is started by MDL3 and, 6 seconds into the game, hands the game over to the real Chef with the hand-off that Chef's own documentation describes for other loaders.
 MDL3 keeps running its mods; Chef runs the Chef mods. No code of Chef, HUDdle or MDL3 is included.
-Download `Chef-Hand-off-for-MDL3-0.2.3.zip` from the Releases page (the same file is in [`dist/`](dist/Chef-Hand-off-for-MDL3-0.2.3.zip)), add it to your mod manager, enable it, and give **MDL3 a higher priority than Chef**, and put this mod between them.
+Download `Chef-Hand-off-for-MDL3-0.2.3.zip` from the Releases page (the same file is in [`dist/`](dist/Chef-Hand-off-for-MDL3-0.2.3.zip)), add it to your mod manager, enable it, give **MDL3 a higher priority than Chef**, and give this mod the **lowest** priority (deployed first): MDL3 3.0.0-dev.33 was seen to look at only the first 512 patch files, so with many mods an addon deployed late is never started.
 **Use 0.2.3, with Chef 1.4.x as with 1.5.x**: Chef runs the callbacks it is handed (MDL3's update and shutdown) under its hang watchdog (there since Chef 1.4.0), which stops them when one call takes over 3 s.
 0.2.1 and 0.2.2 were meant to keep them out of Chef's hands, but MDL3 runs every addon in a sandbox of its own, and they only took the callbacks off that sandbox (the 0.2.2 log showed it); 0.2.3 takes them off the game's own global table.
-Tested by the repository owner in the real game (MDL3 3.0.0-dev.29; Chef 1.4.1 with 0.1.0 and 0.2.0, Chef 1.5.1 with 0.2.1, 0.2.2 and 0.2.3: HUDdle, Treasure Radar and the BF5 feedback all ran). With 0.2.3 Chef 1.5.1 kept none of MDL3's callbacks, and MDL3's update ran once a frame behind Chef's, outside its watchdog. The documentation is in Chinese; the Lua source is commented in English.
+Tested by the repository owner in the real game (MDL3 3.0.0-dev.29: Chef 1.4.1 with 0.1.0 and 0.2.0, Chef 1.5.1 with 0.2.1, 0.2.2 and 0.2.3; MDL3 3.0.0-dev.33: Chef 1.5.1 with 0.2.3. HUDdle, Treasure Radar and the BF5 feedback all ran). With 0.2.3 Chef 1.5.1 kept none of MDL3's callbacks, and MDL3's update ran once a frame behind Chef's, outside its watchdog. The documentation is in Chinese; the Lua source is commented in English.
 
 ## 真机状态
 
-作者在自己的游戏里测的：MDL3 3.0.0-dev.29，Chef Shared Loader 1.4.1，HUDdle 0.6.11，BF5 击杀反馈 MDL3 版 2.0.1，Treasure Radar 0.7.1n。
+作者在自己的游戏里测的：MDL3 3.0.0-dev.29 和 3.0.0-dev.33，Chef Shared Loader 1.4.1 和 1.5.1，HUDdle 0.6.11，BF5 击杀反馈 MDL3 版 2.0.1，Treasure Radar 0.7.1n。
 
 | 项目 | 结果 | 依据 |
 |---|---|---|
@@ -29,6 +29,8 @@ Tested by the repository owner in the real game (MDL3 3.0.0-dev.29; Chef 1.4.1 w
 | 0.2.1 + Chef 1.5.1 | HUDdle、Treasure Radar（0.7.1）、BF5 反馈都正常；Chef 的看门狗开着，没有判谁卡死，退出时 `shutdown (clean)`。**但 Chef 仍然收下了 MDL3 的两个回调**（`running the callbacks the boot script in ...patch_89 set before it started me (2)`），这正是 0.2.1 要避免的 | 0.2.1 的 `chef_handoff.log`、`chef_loader.log`、`MDL.log`、`MDL3.log` |
 | 0.2.2 + Chef 1.5.1 | 同样都正常，Chef 同样收下两个。0.2.2 多记的日志说清了原因：**MDL3 给每个 addon 一个沙箱**（addon 的 `_G` 不是全局表，有 MDL3 的 `__index` / `__newindex`），addon 的 `update`、`shutdown` 是它自己的；0.2.1、0.2.2 摘的只是沙箱里的，`render` 摘掉了，MDL3 真正的 `update`、`shutdown` 还在游戏的全局表上，Chef 从那里拿走。也就是说 MDL3 的更新一直在 Chef 的看门狗下面跑（只是这台机器上没有超过 3 秒的调用）。0.2.1 后猜的“中间写文件”是错的。0.2.3 改在游戏的全局表上摘 | 0.2.2 的 `chef_handoff.log`（`around the globals`、`still on the globals ... update, shutdown` 等行）、`chef_loader.log`；见 [`docs/chef-under-mdl3.md`](docs/chef-under-mdl3.md) |
 | 0.2.3 + Chef 1.5.1 | 作者：跑起来正常。Chef 的日志里**没有** `running the callbacks ...` 了：Chef 第一次没有收下 MDL3 的任何回调；HUDdle、Treasure Radar 启动，认出任务世界，退出 `shutdown (clean)`。交接 addon 用的是游戏的全局表（`getfenv(0)`，它没有元表），Chef 加载后那里是 Chef 的四个回调，MDL3 的更新每帧一次、在 Chef 后面。MDL3 的 mod 库扫描也正常 | 0.2.3 的 `chef_handoff.log`、`chef_loader.log`、`MDL.log` |
+| 0.2.3 + MDL3 3.0.0-dev.33 + Chef 1.5.1 | 作者：HUDdle、Treasure Radar、BF5 反馈都正常。和 dev.29 下一样：Chef 由 dev.33 的 boot 交接启动，没有收下 MDL3 的回调，MDL3 的更新每帧一次，退出 `shutdown (clean)`。**更新到 dev.33 后的第一次启动里本 mod 没有运行**（`chef_handoff.log` 一行都没写，Chef 也没起来），可 MDL3 的日志和下一次一模一样，原因没找到；下一次起正常 | 两次启动的 `chef_handoff.log`、`chef_loader.log`、`MDL.log`、`MDL3.log`；见 [`docs/chef-under-mdl3.md`](docs/chef-under-mdl3.md) 的“第七次真机结果” |
+| mod 很多（一位玩家：837 个补丁文件）+ MDL3 3.0.0-dev.33 | 交接没有发生：MDL3 只看了 512 个补丁文件（`discovery 3 declared entries in 512 archive(s)`），比这靠后的 addon 一个也没发现，本 mod（当时放在 MDL3 和 Chef 之间）也在其中，MDL3 没有启动它。所以现在建议把本 mod 放在最低优先级（见“安装”）。改了以后的结果还没有回报 | 那位玩家的 `MDL.log`，和更早一次（Chef 在最上面）的 `chef_loader.log`；见 [`docs/chef-under-mdl3.md`](docs/chef-under-mdl3.md) |
 | MDL3 设置里所有 mod 的分类都是“未知” | 0.2.1 那次出现（名字正常）。那次启动时 MDL3 自己读文件的服务坏了：每个 `sys list`、`sys tree` 都失败（`attempt to index upvalue 'kernel' (a nil value)`），图标也读不出（`'images'` 为 nil），mod 库扫描 80 毫秒就结束。这些都发生在交接之前 6 秒。下一次（0.2.2，同样的安装、同样启用交接）扫描正常：1306 毫秒，没有这种错误，Chef 1.5.1 被认作启动加载器。**所以是时有时无的，看起来是 MDL3 自己的；没有做过不启用交接的对照** | 0.2.1 和 0.2.2 两次的 `MDL.log` |
 
 ESC 那次闪退没有找到原因，0.2.0 也没有做任何针对它的改动，所以只能说"没有再出现"，不能说"修好了"。顺带一个事实：闪退那一次还没有装 BF5 反馈（作者当时说还没试 MDL3 的 mod，Chef 的日志里也没有它），之后的几次都装了（详见 [`docs/chef-under-mdl3.md`](docs/chef-under-mdl3.md)）。
@@ -36,7 +38,7 @@ ESC 那次闪退没有找到原因，0.2.0 也没有做任何针对它的改动�
 ## 它怎么工作
 
 1. 游戏只运行优先级最高的补丁里的 `boot`。MDL3 的优先级高，运行的就是 MDL3 的 boot；Chef 不会运行别的加载器的 boot，所以 Chef 和它的 mod 默认不工作。
-2. MDL3 会启动所有带 `HD2-Addon` 头的 Lua，包括这个 mod。
+2. MDL3 会启动所有带 `HD2-Addon` 头的 Lua，包括这个 mod。（MDL3 3.0.0-dev.33 在一位玩家那里只看了前 512 个补丁文件，更靠后的它发现不了，所以本 mod 要放在最低优先级，见“安装”。）
 3. 这个 mod 等 6 秒，然后用 Chef 文档里"给其它加载器"写明的办法（设一个便条，再 `require` Chef 的核心）把游戏交给 Chef。之后 MDL3 的 mod 照常运行，Chef 运行它自己的 mod。
 4. 0.2.0 多做一步：MDL3 也会"启动"Chef 的 mod（给它们的不是 Chef，多数会报错）。没报错的（Treasure Radar）会被 Chef 当作"已经被别的加载器启动"而跳过。
    所以交接前，这个 mod 读游戏的补丁文件找出做给 Chef 的 addon，把它们从 `package.loaded` 里摘掉，让 Chef 正常启动它们。
@@ -55,7 +57,7 @@ ESC 那次闪退没有找到原因，0.2.0 也没有做任何针对它的改动�
 1. 你已经有 MDL3、Chef Shared Loader（1.2.0 以上；**请用本 mod 的 0.2.3**，Chef 1.4.x 和 1.5.x 都是）和要用的 mod。
 2. 从本仓库的 Releases 页下载 `Chef-Hand-off-for-MDL3-0.2.3.zip`（[`dist/`](dist/Chef-Hand-off-for-MDL3-0.2.3.zip) 里是同一个文件），加进 Arsenal / HD2 Mod Manager 并启用。
 3. **MDL3 的优先级要比 Chef 高**（游戏运行的 boot 必须是 MDL3 的）。Arsenal 里：设置是 *First mod highest priority* 就把 MDL3 放在 Chef 上面，是 *Last mod highest priority* 就放在下面。这和 Chef、HUDdle 的说明（要求 Chef 最高）相反。
-4. 建议把本mod放在MDL3和Chef之间。
+4. **本 mod 放在最低优先级**（最先部署，它的补丁编号就最小）。它没有 boot，放在哪里都不影响它运行；但 MDL3 3.0.0-dev.33 在一位玩家那里只看了前 512 个补丁文件，mod 多的时候，部署得晚的 addon 它发现不了，也就不启动（见“出问题时”）。作者自己的安装就是这样摆的（本 mod 在 `patch_0`）。
 5. Purge，再 Deploy。启动游戏，在标题画面停 10 秒以上，再进一局任务。
 
 ## 出问题时
@@ -63,6 +65,7 @@ ESC 那次闪退没有找到原因，0.2.0 也没有做任何针对它的改动�
 | 现象 | 多半是 |
 |---|---|
 | BF5 反馈（MDL3）正常，HUDdle 没有 | 交接没成功：看 `%APPDATA%\Arrowhead\Helldivers2\chef_handoff.log` |
+| 同上，而且没有 `chef_handoff.log`；`MDL.log` 开头写着 `discovery ... in 512 archive(s)`，下面没有 `mods/jfredist/chef_handoff` 那一行 | mod 太多，本 mod 排得太靠后：MDL3 3.0.0-dev.33 只看了前 512 个补丁文件，没发现它。把本 mod 放到最低优先级，Purge 再 Deploy。同样排在后面的 MDL3 mod 也不会运行。`MDL.log` 里一大堆 `sys path outside allowed roots` 是 MDL3 的模组库读不了 Arsenal 的文件夹（列表和图标），和这个无关 |
 | HUDdle 正常，BF5 反馈（MDL3）没有，也没有 `chef_handoff.log` | Chef 的优先级还是高的（摆反了） |
 | 都没有 | 看 `chef_handoff.log` 和 `chef_loader.log` |
 | 按 F9 时 Chef 的菜单和某个 mod 自己的菜单一起出来（比如 First Person Camera by Webbox） | 那个 mod 由 MDL3 运行，以为没有 Chef，就自己用 F9；Chef 的菜单默认也是 F9。把 Chef 的菜单键改到别的键：在 Chef 的菜单里按 F9 > Chef Shared Loader > Open this menu，按右方向键（或回车），再按新键（比如 F10）。不进菜单也行：关掉游戏，在 `%APPDATA%\Arrowhead\Helldivers2\chef_loader_settings.txt` 里放一行 `_loader<Tab>opt.menu_key<Tab>s<Tab>f10`（四段之间是 Tab 键，不是空格；已有 `opt.menu_key` 那一行就替换它；文件没有就新建）。详见 [`handoff/README.md`](handoff/README.md) |
@@ -104,6 +107,10 @@ HUDDLE_LUA=<HUDdle 的 Lua 文件> tests/handoff_sim.sh <Chef 仓库路径>   # 
   再给 `HUDDLE_LUA`（真实的 HUDdle 0.6.11，不在仓库里）跑变体 D，共 90 项，全过。F 是为 1.5.x 加的：0.2.0 在 1.5.1 上过不了它。G 是 0.2.1 之后的猜测（后来证明猜错了），留着检查交接中间不运行别的东西。H 是照 0.2.2 的真机日志做的：0.2.2 在它上面逐行写出和真机一样的日志（`still on the globals ... update, shutdown` 等），真实的 Chef 1.5.1 写出同样的 `(2)`，并在那次慢调用上把 MDL3 判成卡死、关掉；0.2.3 过得了。
 - 变异检查：故意改坏交接 addon 的 27 处（0.1.0 的 9 处、0.2.0 新增的 11 处、0.2.1 新增的 7 处），自写测试全部抓到（一个防御性的等价变异除外），模拟器测试抓到影响真实 Chef 行为的那些。这是一次性的手工检查，脚本没有放进仓库。0.2.2 新加的测试拿 0.2.1 跑：守卫模型那一项失败。0.2.3 新加的测试拿 0.2.2 跑：沙箱模型里 Chef 拿到 MDL3 的 `update`、`shutdown`，MDL3 的更新在 Chef 里面跑；去掉替身那一步，守着新键的全局表会吞掉 Chef 的回调，测试都抓到。
 - 补丁写入器：5 个资源哈希向量吻合（含 Chef 公布的 `boot`、`core_1` 和两个真实 mod 的资源 ID）；能把真实 mod 的 Lua 补丁逐字节重建（`HD2_FIXTURE_PATCHES` 给补丁文件路径，用冒号分隔）。打好的 zip 是确定性的。
+
+**Windows 上**（2026-11-02 在 Windows 11 上跑通，结果同上，没有跑可选的变体 D）：用 Git Bash 运行这两个脚本。`python3` 这个名字要找到真正的 Python，不是应用商店的占位程序；Pillow 要装在 Python 自己的 site-packages 里（脚本用 `python3 -I`，不看 `--user` 装的包）。
+Chef 的模拟器从 Python 启动 `lua5.1`，Windows 把 `.1` 当成扩展名，找不到 `lua5.1.exe`：在同一个文件夹里放一份不带扩展名的副本 `lua5.1`。
+本仓库和 Chef 仓库都要用 LF 检出（`git config core.autocrlf false`，Chef 仓库再加 `git config core.eol lf`，然后重新检出），否则脚本跑不起来，zip 也对不上。
 
 `tests/handoff_sim.sh` 会先把 Chef 仓库**复制**到临时目录再运行 Chef 自带的模拟器（`tools/modsim/modsim.py`）。它运行的是 Chef 仓库里的代码（模拟器、构建脚本、加载器本体），运行前请先读一遍。
 

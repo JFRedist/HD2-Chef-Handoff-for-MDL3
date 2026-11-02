@@ -21,6 +21,9 @@
 - 记下 0.2.3 + Chef 1.5.1 的真机结果（“第六次真机结果”）：修法在真机上起作用。
 - 文档：Chef 的菜单键（F9）和由 MDL3 运行、自己用 F9 的 mod 冲突（作者遇到的是 First Person Camera by Webbox），改法是把 Chef 的菜单键改到别的键；以及 Chef 菜单里 “Run by MDL3 chef_handoff” 那一行的意思。
 - **更正**：文档里“Chef 1.5.0 起才把收下的回调放在看门狗下面，1.4.1 上没事”是错的。看门狗是 Chef 1.4.0 加的，1.4.1 也这样（用真实的 1.4.1 在模拟器里补测：0.2.0 下对方的更新链被终止，0.2.3 下没事）。改了 README、`handoff/README.md`、`docs/chef-under-mdl3.md` 和 `release-notes/v0.2.3.md`。
+- 记下 0.2.3 + MDL3 3.0.0-dev.33 + Chef 1.5.1 的真机结果（“第七次真机结果”）：正常，和 dev.29 下一样；更新后的第一次启动里本 mod 没有运行，原因没找到。
+- **安装建议改了**：本 mod 放在**最低优先级**（原来建议放在 MDL3 和 Chef 之间）。一位玩家的日志显示 MDL3 dev.33 只看了 837 个补丁文件里的前 512 个，没发现放在后面的本 mod。改了 README、`handoff/README.md`，`docs/chef-under-mdl3.md` 加了一节。他猜的 “allowed roots” 只影响 MDL3 设置里的列表和图标。Nexus 文案没改。
+- 测试和打包在 Windows 上也能跑：`tests/test_handoff.lua` 在 Windows 上用 cmd 建删目录（原来是 `rm -rf`、`mkdir -p`），`tools/pack.py` 写 `manifest.json` 固定用 LF（原来在 Windows 上是 CRLF，zip 就和 `dist/` 对不上了）。README 的“开发与测试”加了 Windows 上要注意的几件事。
 - 交接 addon 0.2.3（见下）。`tests/handoff_sim.sh` 加了变体 H（照 0.2.2 真机日志做的 MDL3 沙箱 + 一次慢调用）；`tests/test_handoff.lua` 加了沙箱模型和守着新键的全局表。0.2.2 的发布说明没有发布过，换成 0.2.3 的。
 
 ## Chef Hand-off for MDL3

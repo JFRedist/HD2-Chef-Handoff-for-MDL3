@@ -13,6 +13,7 @@
 - 发布：`.github/workflows/release.yml`（推 `v*` 标签或手动运行时，核对 `dist/` 的 zip 与源码一致，再建 Release）和 `release-notes/`。第一个 Release 是 v0.2.0。
 - 新增 `docs/nexus-page.md`：上架 Nexus Mods 的页面文字。
 - 新增 `promo/`：宣传视频（中文字幕的动画讲解，约 99 秒）的源文件、封面和 B 站投稿文案。视频由 `promo/render.js` 生成，不入库。
+- `promo/nexus-images.html`：Nexus 页面用的 6 张英文图解（主图、问题、交接过程、优先级、0.2.0 的变化、怎么确认）。
 
 ## Chef Hand-off for MDL3
 

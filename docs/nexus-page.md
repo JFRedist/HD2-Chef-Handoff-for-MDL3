@@ -149,7 +149,21 @@ First public release. Chef mods that MDL3 starts without Chef (Treasure Radar) a
 1. **AI 标签。** Nexus 要求给 AI 生成的内容打标签。我这里打不开 Nexus，只从搜索摘要看到：有一个 *AI-Generated Content* 标签（摘要里写的范围包括代码），和一个 *AI Assisted* 标签（AI 只有有限参与时用）；没打标签可能被处理。这个 mod 的代码是我写的，所以请在上传页选 *AI-Generated Content*，具体选项以页面上的原文为准。描述末尾的那句 Claude 的说明请保留。
 2. **要求（Requirements）栏。** 把 MDL3 的页面加进去；Chef Shared Loader 如果在 Nexus 上也有页面就一起加。我没找到它们的 Nexus 链接，所以描述里 MDL3 没有链接，Chef 的链接指向它的 GitHub Release（它的 README 里写的下载地方）。
    描述里其余的 Nexus 链接：HUDdle（18108）和 BF5 的 MDL3 版（16927）的编号是你给我的；Treasure Radar 的编号 18265 是我从你 Arsenal 里它的文件夹名（`Treasure Radar 18265 0.7.1n …`）取的，我打不开 Nexus，发布前请点一下确认。
-3. **图片。** 页面至少要有一张图。建议三张：(a) Arsenal 里 MDL3 在 Chef 上面的列表；(b) `chef_handoff.log` 成功的几行；(c) 同一局任务里 HUDdle 和一个 MDL3 mod 同时在起作用。
+3. **图片。** 已经做好 6 张 1920×1080 的英文图解（`promo/nexus-images.html`，用 `node promo/render.js nexus out/nexus` 生成；每张不到 1 MB）。按这个顺序传，第一张当主图：
+
+   | 文件 | 标题（Nexus 图片的 caption） |
+   |---|---|
+   | `01-hero.png` | Chef Hand-off for MDL3: run Chef mods and MDL3 mods in the same game |
+   | `02-the-problem.png` | The problem: the game runs one boot script, so it is Chef or MDL3 |
+   | `03-how-the-hand-off-works.png` | How it works: MDL3 keeps the boot, the addon hands the game to Chef after 6 s |
+   | `04-give-mdl3-the-higher-priority.png` | Install tip: MDL3 needs the higher priority (both Arsenal settings) |
+   | `05-new-in-0.2.0.png` | New in 0.2.0: Treasure Radar and other Chef mods are no longer skipped |
+   | `06-how-to-tell-it-works.png` | How to tell it works: the log lines to look for |
+
+   它们是**图解，不是游戏截图**；图里的日志行和数字来自你真机的 `chef_handoff.log`（图上写了"excerpt / real run"）。
+   建议再自己截 1～2 张真机图补在后面：同一局任务里 HUDdle 和一个 MDL3 mod（比如 BF5 击杀反馈）同时在起作用，我做不了这个。
+   描述里用 `[img]` 只能贴外链图，所以这些图作为页面的图库图片上传即可。
+   **AI 标签**：Nexus 的搜索摘要里提到还有一个给"AI 生成的宣传图（比如横幅）"的标签。这些图是我用代码（HTML/CSS 渲染）画的，不是图像生成模型生成的，但设计和文字是 AI 完成的；上传页如果有这类选项，我建议选上，具体以页面原文为准。
 4. **分类和标签。** 选最接近"工具 / 加载器"的分类和标签，我不知道 Helldivers 2 版块现有的选项。
 5. **权限。** 代码是 MIT，所以最一致的做法是放开：允许别人在署名的前提下使用、修改、再发布。具体选哪项由你决定。
 6. **链接里的仓库名。** 描述里的 GitHub 链接用的是现在的仓库名 `HD2-Chef-Handoff-for-MDL3`；以后再改名要同步改。

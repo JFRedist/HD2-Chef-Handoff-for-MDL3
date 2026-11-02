@@ -3,6 +3,7 @@
 //   node promo/render.js video [out.mp4] [workers]  the whole video, 1920x1080, 30 fps, H.264 + a silent AAC track (4 workers by default)
 //   node promo/render.js srt [out.srt]              the subtitles as an .srt
 //   node promo/render.js cover [out.png]            the Bilibili cover, 1920x1200 (16:10)
+//   node promo/render.js nexus [outdir]             the images for the Nexus Mods page (promo/nexus-images.html), 1920x1080 PNGs
 // Needs node with playwright (and its chromium), ffmpeg, and a Chinese font (the layout uses WenQuanYi Zen Hei).
 const { chromium } = require('playwright');
 const { spawn } = require('child_process');
@@ -40,6 +41,16 @@ async function main() {
   } else if (cmd === 'cover') {
     const { browser, page } = await open('cover.html', { width: 1920, height: 1200 });
     await page.screenshot({ path: a1 || 'cover.png' });
+    await browser.close();
+  } else if (cmd === 'nexus') {
+    const dir = a1 || 'nexus'; fs.mkdirSync(dir, { recursive: true });
+    const { browser, page } = await open('nexus-images.html', { width: 1920, height: 1080 });
+    const n = await page.evaluate(() => window.COUNT);
+    for (let i = 1; i <= n; i++) {
+      const name = await page.evaluate((k) => window.show(k), i);
+      await page.screenshot({ path: path.join(dir, name + '.png') });
+      console.error('wrote', path.join(dir, name + '.png'));
+    }
     await browser.close();
   } else if (cmd === 'chunk') {
     // internal: frames [from, to) of the video into a video-only mp4 (the `video` command runs several of these at once)

@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chef Hand-off for MDL3: images for the Nexus Mods page</title>
+<style>
+:root{--bg0:#0a0e14;--bg1:#111b2b;--line:#2b3d5a;--text:#e9f0fa;--muted:#8da3bf;
+      --chef:#ffb224;--mdl:#38c8ff;--ok:#3ddc84;--bad:#ff5c63;--warn:#ffd23f}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1920px;height:1080px;overflow:hidden;background:#0a0e14}
+body{font-family:"DejaVu Sans","WenQuanYi Zen Hei",sans-serif;color:var(--text)}
+.page{display:none;position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;
+  background:radial-gradient(1100px 650px at 78% 12%,rgba(56,200,255,.14),transparent 62%),
+             radial-gradient(900px 600px at 8% 95%,rgba(255,178,36,.11),transparent 60%),
+             linear-gradient(165deg,var(--bg1),var(--bg0))}
+.page.on{display:block}
+.grid{position:absolute;inset:0;opacity:.55;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:80px 80px}
+.brand{position:absolute;left:80px;top:46px;font-size:28px;font-weight:700;color:var(--muted)}
+.brand i{display:inline-block;width:14px;height:14px;background:var(--warn);margin-right:14px;transform:rotate(45deg)}
+.h1{position:absolute;left:0;top:112px;width:1920px;text-align:center;font-size:66px;font-weight:800}
+.sub{position:absolute;left:0;top:210px;width:1920px;text-align:center;font-size:33px;color:var(--muted)}
+.a{position:absolute}
+.card{position:absolute;border:4px solid var(--line);border-radius:30px;background:rgba(21,32,51,.94)}
+.chip{display:inline-block;padding:10px 24px;border-radius:999px;border:3px solid;font-size:30px;font-weight:700;margin:0 12px 12px 0;white-space:nowrap}
+.mono{font-family:"DejaVu Sans Mono","WenQuanYi Zen Hei Mono",monospace}
+.chef{border-color:var(--chef);color:var(--chef)}.mdl{border-color:var(--mdl);color:var(--mdl)}.ok{border-color:var(--ok);color:var(--ok)}
+.dim{opacity:.4;filter:grayscale(.7)}
+.lrow{position:absolute;left:130px;width:560px;height:86px;border:3px solid;border-radius:18px;padding:0 28px;font-size:34px;font-weight:800;display:flex;align-items:center}
+.lrow.m{border-color:var(--mdl);color:var(--mdl);background:rgba(56,200,255,.13)}
+.lrow.c{border-color:var(--chef);color:var(--chef);background:rgba(255,178,36,.12)}
+.lrow.o{border-color:var(--line);border-style:dashed;color:var(--muted);font-weight:400;font-size:30px}
+.node{position:absolute;top:434px;width:72px;height:72px;border-radius:50%;color:#06101c;font-size:40px;font-weight:800;text-align:center;line-height:72px}
+.when{position:absolute;top:330px;width:400px;text-align:center;font-size:56px;font-weight:800}
+.say{position:absolute;top:545px;width:410px;height:310px;padding:24px 26px;font-size:29px;line-height:1.42}
+.tcell{padding:0 22px;display:flex;align-items:center;font-size:30px;line-height:1.3}
+code{font-family:"DejaVu Sans Mono","WenQuanYi Zen Hei Mono",monospace;color:var(--warn)}
+</style>
+</head>
+<body>
+
+<!-- 1: hero -->
+<section class="page" id="p1" data-name="01-hero">
+  <div class="grid"></div><div class="brand"><i></i>Chef Hand-off for MDL3</div>
+  <div class="a" style="left:110px;top:190px;font-size:28px;letter-spacing:6px;color:var(--muted);font-weight:700">HELLDIVERS 2  ·  MDL3 ADDON</div>
+  <div class="a" style="left:104px;top:240px;font-size:108px;font-weight:800;line-height:1.08;white-space:nowrap">Chef Hand-off<br><span style="color:var(--warn)">for MDL3</span></div>
+  <div class="a" style="left:110px;top:520px;width:1000px;font-size:46px;line-height:1.35">Run <b style="color:var(--chef)">Chef Shared Loader</b> mods and <b style="color:var(--mdl)">MDL3</b> mods in the same game.</div>
+  <div class="a" style="left:110px;top:720px;width:1040px"><span class="chip chef">HUDdle</span><span class="chip chef">Treasure Radar</span><span class="chip mdl">BF5 Hit and Kill Feedback</span></div>
+  <div class="a" style="left:110px;top:930px;font-size:28px;color:var(--muted)">A tiny MDL3 addon  ·  hands the game to Chef after 6 s  ·  MIT license</div>
+
+  <div class="card" style="left:1190px;top:190px;width:620px;height:270px;border-color:var(--mdl)">
+    <div class="a" style="left:32px;top:24px;font-size:40px;font-weight:800;color:var(--mdl)">MDL3</div>
+    <div class="a" style="left:32px;top:80px;font-size:26px;color:var(--muted)">runs its mods as before</div>
+    <div class="a" style="left:32px;top:140px"><span class="chip mdl">BF5 kill feedback</span></div>
+  </div>
+  <div class="a" style="left:1496px;top:460px;width:8px;height:170px;background:var(--ok);box-shadow:0 0 24px var(--ok)"></div>
+  <div class="a" style="left:1480px;top:618px;width:0;height:0;border-left:20px solid transparent;border-right:20px solid transparent;border-top:30px solid var(--ok)"></div>
+  <div class="a" style="left:1270px;top:514px;width:460px;height:62px;border-radius:999px;border:3px solid var(--ok);background:#0f2a22;color:var(--ok);font-size:30px;font-weight:800;text-align:center;line-height:56px">Chef Hand-off  ·  after 6 s</div>
+  <div class="card" style="left:1190px;top:660px;width:620px;height:270px;border-color:var(--chef)">
+    <div class="a" style="left:32px;top:24px;font-size:40px;font-weight:800;color:var(--chef);white-space:nowrap">Chef Shared Loader</div>
+    <div class="a" style="left:32px;top:80px;font-size:26px;color:var(--muted)">starts 6 seconds in</div>
+    <div class="a" style="left:32px;top:140px"><span class="chip chef">HUDdle</span><span class="chip chef">Treasure Radar</span></div>
+  </div>
+</section>
+
+<!-- 2: the problem -->
+<section class="page" id="p2" data-name="02-the-problem">
+  <div class="grid"></div><div class="brand"><i></i>Chef Hand-off for MDL3</div>
+  <div class="h1">Helldivers 2 runs only <span style="color:var(--warn)">one</span> boot script</div>
+  <div class="sub">Chef Shared Loader and MDL3 both want to be it, so normally you get one or the other.</div>
+
+  <div class="card" style="left:110px;top:300px;width:820px;height:560px;border-color:var(--chef)">
+    <div class="a" style="left:40px;top:26px;font-size:46px;font-weight:800;color:var(--chef)">Chef on top</div>
+    <div class="a" style="left:40px;top:92px;font-size:26px;color:var(--muted)">Chef has the higher priority</div>
+    <div class="a" style="left:36px;top:150px;width:740px;height:176px;border:3px solid rgba(61,220,132,.55);background:rgba(61,220,132,.08);border-radius:22px;padding:22px 26px">
+      <div style="font-size:34px;font-weight:800;color:var(--ok)">✓ Chef and its mods run</div>
+      <div style="margin-top:16px"><span class="chip chef">HUDdle</span><span class="chip chef">Treasure Radar</span></div></div>
+    <div class="a" style="left:36px;top:352px;width:740px;height:176px;border:3px solid rgba(255,92,99,.55);background:rgba(255,92,99,.08);border-radius:22px;padding:22px 26px">
+      <div style="font-size:34px;font-weight:800;color:var(--bad)">✗ MDL3 and its mods do not</div>
+      <div class="dim" style="margin-top:16px"><span class="chip mdl">BF5 kill feedback</span><span class="chip mdl">MDL3 mods</span></div></div>
+  </div>
+
+  <div class="card" style="left:990px;top:300px;width:820px;height:560px;border-color:var(--mdl)">
+    <div class="a" style="left:40px;top:26px;font-size:46px;font-weight:800;color:var(--mdl)">MDL3 on top</div>
+    <div class="a" style="left:40px;top:92px;font-size:26px;color:var(--muted)">MDL3 has the higher priority</div>
+    <div class="a" style="left:36px;top:150px;width:740px;height:176px;border:3px solid rgba(61,220,132,.55);background:rgba(61,220,132,.08);border-radius:22px;padding:22px 26px">
+      <div style="font-size:34px;font-weight:800;color:var(--ok)">✓ MDL3 and its mods run</div>
+      <div style="margin-top:16px"><span class="chip mdl">BF5 kill feedback</span><span class="chip mdl">MDL3 mods</span></div></div>
+    <div class="a" style="left:36px;top:352px;width:740px;height:176px;border:3px solid rgba(255,92,99,.55);background:rgba(255,92,99,.08);border-radius:22px;padding:22px 26px">
+      <div style="font-size:34px;font-weight:800;color:var(--bad)">✗ Chef and its mods do not</div>
+      <div class="dim" style="margin-top:16px"><span class="chip chef">HUDdle</span><span class="chip chef">Treasure Radar</span></div></div>
+  </div>
+  <div class="a" style="left:0;top:925px;width:1920px;text-align:center;font-size:42px;font-weight:800;color:var(--ok)">Chef Hand-off lets both run.</div>
+</section>
+
+<!-- 3: how the hand-off works -->
+<section class="page" id="p3" data-name="03-how-the-hand-off-works">
+  <div class="grid"></div><div class="brand"><i></i>Chef Hand-off for MDL3</div>
+  <div class="h1">How the hand-off works</div>
+  <div class="sub">MDL3 keeps the game's boot. A tiny addon hands the game to Chef 6 seconds in.</div>
+  <div class="a" style="left:240px;top:466px;width:1440px;height:8px;border-radius:4px;background:linear-gradient(90deg,var(--mdl),var(--warn) 36%,var(--ok) 64%,var(--ok))"></div>
+
+  <div class="node" style="left:264px;background:var(--mdl)">1</div>
+  <div class="when" style="left:100px;color:var(--mdl)">0 s</div>
+  <div class="card say" style="left:95px;border-color:rgba(56,200,255,.55)">MDL3 runs the game's boot and starts its addons, Chef Hand-off among them.</div>
+
+  <div class="node" style="left:704px;background:var(--warn)">2</div>
+  <div class="when" style="left:540px;color:var(--warn)">≈ 5 s</div>
+  <div class="card say" style="left:535px;border-color:rgba(255,210,63,.55)">Chef Hand-off reads the game's patch files and finds the addons made for Chef (91 files in 5 ms in one real run).</div>
+
+  <div class="node" style="left:1144px;background:var(--ok)">3</div>
+  <div class="when" style="left:980px;color:var(--ok)">6 s</div>
+  <div class="card say" style="left:975px;border-color:rgba(61,220,132,.55)">It hands the game to Chef, with the hand-off that Chef's own documentation describes for other loaders.</div>
+
+  <div class="node" style="left:1584px;background:var(--text)">4</div>
+  <div class="when" style="left:1420px;color:var(--text)">then</div>
+  <div class="card say" style="left:1415px;border-color:rgba(233,240,250,.4)">MDL3 keeps running its mods. Chef runs its mods: HUDdle, Treasure Radar and the rest.</div>
+
+  <div class="a" style="left:0;top:905px;width:1920px;text-align:center">
+    <span class="chip" style="border-color:var(--line);color:var(--muted);font-size:26px">Nothing of Chef, HUDdle or MDL3 is included or changed</span><span class="chip" style="border-color:var(--line);color:var(--muted);font-size:26px">Lua only, no DLLs</span><span class="chip" style="border-color:var(--line);color:var(--muted);font-size:26px">Does nothing if Chef is missing or already running</span></div>
+</section>
+
+<!-- 4: the priority rule -->
+<section class="page" id="p4" data-name="04-give-mdl3-the-higher-priority">
+  <div class="grid"></div><div class="brand"><i></i>Chef Hand-off for MDL3</div>
+  <div class="h1">Give <span style="color:var(--mdl)">MDL3</span> the higher priority</div>
+  <div class="sub">The game has to run MDL3's boot. This is the opposite of what Chef's and HUDdle's own instructions say.</div>
+
+  <div class="card" style="left:110px;top:290px;width:780px;height:520px;border-color:var(--warn)">
+    <div class="a mono" style="left:40px;top:28px;font-size:34px;font-weight:800;color:var(--warn)">First mod highest priority</div>
+    <div class="a" style="left:76px;top:142px;width:8px;height:276px;background:var(--ok)"></div>
+    <div class="a" style="left:60px;top:114px;width:0;height:0;border-left:20px solid transparent;border-right:20px solid transparent;border-bottom:32px solid var(--ok)"></div>
+    <div class="lrow m" style="top:130px">MDL3</div>
+    <div class="lrow c" style="top:238px">Chef Shared Loader</div>
+    <div class="lrow o" style="top:346px">other mods ...</div>
+    <div class="a" style="left:40px;top:448px;font-size:28px;color:var(--muted)">The higher up, the higher the priority.</div>
+  </div>
+
+  <div class="card" style="left:1030px;top:290px;width:780px;height:520px;border-color:var(--warn)">
+    <div class="a mono" style="left:40px;top:28px;font-size:34px;font-weight:800;color:var(--warn)">Last mod highest priority</div>
+    <div class="a" style="left:76px;top:130px;width:8px;height:276px;background:var(--ok)"></div>
+    <div class="a" style="left:60px;top:404px;width:0;height:0;border-left:20px solid transparent;border-right:20px solid transparent;border-top:32px solid var(--ok)"></div>
+    <div class="lrow o" style="top:130px">other mods ...</div>
+    <div class="lrow c" style="top:238px">Chef Shared Loader</div>
+    <div class="lrow m" style="top:346px">MDL3</div>
+    <div class="a" style="left:40px;top:448px;font-size:28px;color:var(--muted)">The further down, the higher the priority.</div>
+  </div>
+
+  <div class="card" style="left:110px;top:850px;width:1700px;height:140px;border-color:rgba(255,92,99,.6);background:rgba(255,92,99,.08)">
+    <div class="a" style="left:40px;top:20px;font-size:34px;font-weight:800;color:var(--bad)">Wrong way round?</div>
+    <div class="a" style="left:40px;top:72px;font-size:28px;color:var(--text)">Chef mods work, MDL3 mods don't, and there is no chef_handoff.log. Swap them, then Purge and Deploy.</div>
+  </div>
+</section>
+
+<!-- 5: new in 0.2.0 -->
+<section class="page" id="p5" data-name="05-new-in-0.2.0">
+  <div class="grid"></div><div class="brand"><i></i>Chef Hand-off for MDL3</div>
+  <div class="h1">New in <span style="color:var(--warn)">0.2.0</span></div>
+  <div class="sub">Chef mods that MDL3 “started” without Chef are no longer skipped by Chef.</div>
+
+  <div class="a" style="left:110px;top:290px;width:1700px">
+    <div style="display:grid;grid-template-columns:480px 520px 350px 350px;color:var(--muted);font-size:26px;height:60px;align-items:center;border-bottom:3px solid var(--line)">
+      <div class="tcell">mod</div><div class="tcell">What MDL3 does</div><div class="tcell">0.1.0</div><div class="tcell">0.2.0</div></div>
+    <div style="display:grid;grid-template-columns:480px 520px 350px 350px;height:112px;border-bottom:2px solid var(--line)">
+      <div class="tcell" style="color:var(--chef);font-weight:800;font-size:34px">HUDdle</div><div class="tcell">Fails to load under MDL3 (it gets no Chef helper)</div>
+      <div class="tcell" style="color:var(--ok);font-weight:700">Chef starts it ✓</div><div class="tcell" style="color:var(--ok);font-weight:700">Chef starts it ✓</div></div>
+    <div style="display:grid;grid-template-columns:480px 520px 350px 350px;height:112px;border-bottom:2px solid var(--line);background:rgba(255,210,63,.09);border-radius:14px">
+      <div class="tcell" style="color:var(--chef);font-weight:800;font-size:34px">Treasure Radar</div><div class="tcell">Loads without error, so it looks “already started”</div>
+      <div class="tcell" style="color:var(--bad);font-weight:700">Chef skips it ✗</div><div class="tcell" style="color:var(--ok);font-weight:700">Chef starts it ✓</div></div>
+    <div style="display:grid;grid-template-columns:480px 520px 350px 350px;height:112px;border-bottom:2px solid var(--line)">
+      <div class="tcell" style="color:var(--mdl);font-weight:800;font-size:30px">BF5 Hit and Kill Feedback (MDL3 build)</div><div class="tcell">MDL3's own mod</div>
+      <div class="tcell" style="color:var(--ok);font-weight:700">Unaffected ✓</div><div class="tcell" style="color:var(--ok);font-weight:700">Unaffected ✓</div></div>
+  </div>
+
+  <div class="card" style="left:110px;top:760px;width:1700px;height:230px;border-color:var(--warn)">
+    <div class="a" style="left:40px;top:24px;font-size:34px;font-weight:800;color:var(--warn)">How 0.2.0 tells</div>
+    <div class="a" style="left:40px;top:80px;width:1620px;font-size:29px;line-height:1.5">Before the hand-off it reads the game's patch files. An addon counts as made for Chef if it has a line that starts with <code>local chef = ...</code> or a <code>-- HD2-Requires: chef-shared-loader</code> header line. Those are taken off <code>package.loaded</code>, so Chef starts them properly.</div>
+  </div>
+</section>
+
+<!-- 6: how to tell it works -->
+<section class="page" id="p6" data-name="06-how-to-tell-it-works">
+  <div class="grid"></div><div class="brand"><i></i>Chef Hand-off for MDL3</div>
+  <div class="h1">How to tell it works</div>
+  <div class="sub">About 6 seconds after launch, in the Helldivers2 folder under <span class="mono" style="color:var(--text)">%APPDATA%\Arrowhead</span></div>
+
+  <div class="card" style="left:110px;top:290px;width:1700px;height:330px;border-color:var(--line);background:#0b111b;overflow:hidden">
+    <div class="mono" style="height:58px;border-bottom:2px solid var(--line);padding:14px 26px;font-size:24px;color:var(--muted)">chef_handoff.log  (excerpt)</div>
+    <div class="mono" style="padding:22px 28px;font-size:26px;line-height:1.85;white-space:pre;color:#cfe3ff">6.0 s | patch files read: 91 (4 addons, 2 made for Chef, 0 read errors) in 5 ms
+6.0 s | made for Chef: mods/chef/treasure_radar mods/rosensterner/minimal_hud
+6.0 s | taken off package.loaded, so that Chef starts them: mods/chef/treasure_radar</div>
+    <div class="mono" style="position:absolute;left:0;right:0;top:238px;height:48px;padding:0 28px;font-size:26px;line-height:48px;white-space:pre;color:var(--ok);background:rgba(61,220,132,.14);border-left:8px solid var(--ok);font-weight:700">6.0 s | Chef Shared Loader 1.4.1 started (api 1). Its own log is chef_loader.log.</div>
+  </div>
+
+  <div class="card" style="left:110px;top:650px;width:1700px;height:122px;border-color:var(--line);background:#0b111b">
+    <div class="mono a" style="left:28px;top:14px;font-size:22px;color:var(--muted)">chef_loader.log</div>
+    <div class="mono a" style="left:28px;top:56px;font-size:26px;color:var(--ok);font-weight:700">started by MDL3 chef_handoff 0.2.0, which handed off to me</div>
+  </div>
+
+  <div class="a" style="left:110px;top:812px;font-size:34px;font-weight:800;line-height:70px">In game:</div>
+  <div class="a" style="left:300px;top:810px;width:1520px"><span class="chip chef" style="font-size:29px">HUDdle HUD in missions</span><span class="chip chef" style="font-size:29px">F9 opens Chef's menu</span><span class="chip mdl" style="font-size:29px">MDL3 mods work as before</span></div>
+  <div class="a" style="left:110px;top:960px;font-size:25px;color:var(--muted)">Excerpts from a real run: MDL3 3.0.0-dev.29, Chef Shared Loader 1.4.1.</div>
+</section>
+
+<script>
+window.COUNT = 6;
+window.show = function (i) {
+  document.querySelectorAll('.page').forEach(function (p) { p.classList.toggle('on', p.id === 'p' + i); });
+  return document.getElementById('p' + i).dataset.name;
+};
+window.show(1);
+window.READY = true;
+</script>
+</body>
+</html>

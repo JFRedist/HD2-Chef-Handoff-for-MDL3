@@ -19,14 +19,16 @@
 -- And one more, found with Chef 1.5: the callbacks the game has (init, update, render, shutdown: MDL3's and its mods' chains) are
 -- kept by Chef when it is handed the game, and it runs them itself after its own, as "a boot script's". From 1.5.0 it does that
 -- under its hang watchdog: a call that runs on for over 3 s counts as a hang and the chain is switched off, MDL3 with it. So
--- Chef is not meant to be given them: they are taken off the globals while Chef loads and put back behind Chef's own (Chef's
--- first, then MDL3's chain, which the game calls as before). In the first real run with Chef 1.5.1 (0.2.1) Chef still found
--- two of them, and why is not known: 0.2.2 runs nothing but require while they are off, and logs what is on the globals before
--- and after, and whether the update chain then runs once a frame or twice (Chef running it too).
+-- Chef is not given them: they are taken off the game's global table while Chef loads and put back behind Chef's own (Chef's
+-- first, then MDL3's, which the game calls as before). The game's global table, not this addon's _G: MDL3 runs every addon in a
+-- sandbox of its own (the real run of 0.2.2 showed it), where update and shutdown are the addon's own. 0.2.1 and 0.2.2 took the
+-- callbacks off that sandbox, so Chef 1.5.1 in the game still found MDL3's own update and shutdown, and ran MDL3's update under its
+-- watchdog. The log says which table was used, what was on it before and after, and whether the update chain then runs once a
+-- frame or twice (Chef running it too).
 --
 -- The Chef side is the documented one (Chef Shared Loader by Th3chef, docs/MODDING.md, "For other loaders": "Everything
 -- here is free to copy into your loader as it is"). Nothing of Chef's code is in this file.
-local VERSION = '0.2.2'
+local VERSION = '0.2.3'
 local CORE = 'mods/chef_shared_loader/core_1'    -- Chef's core, a Lua resource without an HD2- header: no loader starts it as a mod
 local DELAY = 6.0                                -- seconds of game time (the frames' dt added up) before the hand-off
 local KEY = '__CHEF_HANDOFF_ADDON'
@@ -118,11 +120,34 @@ local function fn_text(f)
   return (ok and type(s) == 'string' and (s:gsub('^function:%s*', '')) or 'function') .. where(f)
 end
 
--- the four callbacks as they are on the globals now; taken: a table of the ones taken off, to mark them where they are back
-local function callbacks_text(taken)
+-- The game's own global table: the one the game reads init, update, render and shutdown from, and the one Chef's core gets as its
+-- globals when it is required (the running thread's globals: getfenv(0)). Under MDL3 3.0.0-dev.29 an addon runs in a sandbox of
+-- its own, as the real run of 0.2.2 showed: its _G is not that table, and update and shutdown there are the addon's own, which MDL3
+-- calls from its own. The callbacks Chef keeps are the ones on the game's table, so that is where they are taken off. It is used
+-- only when it holds the engine's stingray table; anywhere else this addon's _G is the global table and is used, as before.
+-- Returns the table, a rawget and a rawset for it (its own: a sandbox may give its addons others), and what it is, for the log.
+local function game_globals()
+  local gf = rawget(_G, 'getfenv')
+  if type(gf) ~= 'function' then return _G, rawget, rawset, 'this addon\'s _G (no getfenv here)' end
+  local ok, g = pcall(gf, 0)
+  if not ok or type(g) ~= 'table' then return _G, rawget, rawset, 'this addon\'s _G (getfenv(0) gave no table)' end
+  if same(g, _G) then return _G, rawget, rawset, 'this addon\'s _G (it is the global table)' end
+  local okr, st = pcall(rawget, g, 'stingray')
+  if not okr or type(st) ~= 'table' then
+    return _G, rawget, rawset, 'this addon\'s _G (getfenv(0) is another table, without the engine\'s stingray in it)'
+  end
+  local rg, rs = rawget(g, 'rawget'), rawget(g, 'rawset')
+  if type(rg) ~= 'function' or type(rs) ~= 'function' then rg, rs = rawget, rawset end
+  return g, rg, rs, 'getfenv(0) (this addon\'s _G is a sandbox of its own, not the global table)'
+end
+
+-- the four callbacks as they are on a table now (this addon's _G unless T, RG are given); taken: a table of the ones taken off,
+-- to mark them where they are back
+local function callbacks_text(taken, T, RG)
+  T, RG = T or _G, RG or rawget
   local parts = {}
   for _, k in ipairs(KEYS) do
-    local f = rawget(_G, k)
+    local f = RG(T, k)
     local t = fn_text(f)
     if taken and f ~= nil and same(f, taken[k]) then t = t .. ' (the one taken off)' end
     parts[#parts + 1] = k .. '=' .. t
@@ -132,28 +157,24 @@ end
 
 -- the globals' table and require as this addon sees them: a loader that guards the callbacks, or loads a module its own
 -- way, shows here
+local function mt_text(t)
+  local gm = rawget(_G, 'getmetatable')
+  if type(gm) ~= 'function' then return 'unknown (no getmetatable here)' end
+  local ok, mt = pcall(gm, t)
+  if not ok then return 'getmetatable failed' end
+  if mt == nil then return 'none' end
+  if type(mt) ~= 'table' then return 'protected (' .. type(mt) .. ')' end
+  local fields = {}
+  for _, name in ipairs({ '__index', '__newindex', '__metatable' }) do
+    local v = rawget(mt, name)
+    if v ~= nil then fields[#fields + 1] = name .. '=' .. (type(v) == 'function' and fn_text(v) or type(v)) end
+  end
+  return #fields > 0 and table.concat(fields, ' ') or 'a table, no __index or __newindex'
+end
+
 local function env_text()
   local parts = {}
-  local gm = rawget(_G, 'getmetatable')
-  if type(gm) ~= 'function' then
-    parts[#parts + 1] = 'metatable of _G: unknown (no getmetatable here)'
-  else
-    local ok, mt = pcall(gm, _G)
-    if not ok then
-      parts[#parts + 1] = 'metatable of _G: getmetatable failed'
-    elseif mt == nil then
-      parts[#parts + 1] = 'metatable of _G: none'
-    elseif type(mt) ~= 'table' then
-      parts[#parts + 1] = 'metatable of _G: protected (' .. type(mt) .. ')'
-    else
-      local fields = {}
-      for _, name in ipairs({ '__index', '__newindex', '__metatable' }) do
-        local v = rawget(mt, name)
-        if v ~= nil then fields[#fields + 1] = name .. '=' .. (type(v) == 'function' and fn_text(v) or type(v)) end
-      end
-      parts[#parts + 1] = 'metatable of _G: ' .. (#fields > 0 and table.concat(fields, ' ') or 'a table, no __index or __newindex')
-    end
-  end
+  parts[#parts + 1] = 'metatable of _G: ' .. mt_text(_G)
   local gf = rawget(_G, 'getfenv')
   if type(gf) == 'function' then
     local ok0, g0 = pcall(gf, 0)
@@ -161,6 +182,7 @@ local function env_text()
     if ok0 then
       parts[#parts + 1] = string.format('_G is the global table: %s, this addon runs in it: %s',
         same(g0, _G) and 'yes' or 'no', okc and (same(g0, gc) and 'yes' or 'no') or '?')
+      if type(g0) == 'table' and not same(g0, _G) then parts[#parts + 1] = 'metatable of the global table: ' .. mt_text(g0) end
     end
   end
   parts[#parts + 1] = 'require: ' .. fn_text(rawget(_G, 'require'))
@@ -184,6 +206,10 @@ for _, name in ipairs({ 'CowboyBingusModLoader', 'HD2ModLoader', 'MDL3', 'MDL', 
   log('  %s = %s', name, describe(name))
 end
 log('  the game\'s callbacks: %s', callbacks_text())
+do
+  local GT, RG = game_globals()
+  if GT ~= _G then log('  the game\'s callbacks (its global table): %s', callbacks_text(nil, GT, RG)) end
+end
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- Chef's addons that MDL3 has already "started"
@@ -341,18 +367,34 @@ end
 -- the game's callbacks: kept away from Chef, put back behind Chef's own
 -- ---------------------------------------------------------------------------------------------------------------------
 local SLOW = 0.5                                     -- seconds of CPU time in one call of the chain worth a line in the log
-local COUNT_FRAMES = 600                             -- Chef updates after the hand-off over which the chain's runs are counted
+local COUNT_FRAMES = 600                             -- frames after the hand-off over which the update chain's runs are counted
 local cpu = (type(os) == 'table' and type(os.clock) == 'function') and os.clock or function() return 0 end
 
--- takes the callbacks off the globals: what is returned is what was there
-local function stash_callbacks()
+-- Empty stand-ins, used instead of taking the callbacks off when the game's table guards the keys it does not have (a __newindex,
+-- or a metatable it hides): Chef sets its own callbacks with plain assignments, and on a missing key such a guard could send them
+-- elsewhere. With a stand-in on each key the assignments land on the table; Chef keeps the stand-ins, which do nothing.
+local STANDIN = {}
+for _, k in ipairs(KEYS) do STANDIN[k] = function() end end
+
+-- does the table guard new keys? (a __newindex, or a metatable that hides itself)
+local function guards_new_keys(T)
+  local gm = rawget(_G, 'getmetatable')
+  if type(gm) ~= 'function' then return false end
+  local ok, mt = pcall(gm, T)
+  if not ok then return true end
+  if mt == nil then return false end
+  if type(mt) ~= 'table' then return true end
+  return rawget(mt, '__newindex') ~= nil
+end
+
+-- takes the callbacks off the game's global table T (RG, RS: its rawget and rawset), or puts a stand-in on each of the four keys
+-- (standins; on the empty ones too, so that every callback Chef sets lands on the table): what is returned is what was there
+local function stash_callbacks(T, RG, RS, standins)
   local saved = {}
   for _, k in ipairs(KEYS) do
-    local f = rawget(_G, k)
-    if type(f) == 'function' then
-      saved[k] = f
-      rawset(_G, k, nil)
-    end
+    local f = RG(T, k)
+    if type(f) == 'function' then saved[k] = f end
+    if standins then RS(T, k, STANDIN[k]) elseif type(f) == 'function' then RS(T, k, nil) end
   end
   return saved
 end
@@ -370,9 +412,10 @@ local function finish(key, t0, ...)
   return ...
 end
 
--- How many times the update chain runs a frame once Chef has the game. This addon's own hook (below) is a link of that chain, so
--- it is counted however the chain is called: once a frame is from behind Chef's update (below); twice means Chef runs the chain
--- as well, which it does only if it kept it (its log's "running the callbacks ... set before it started me").
+-- How many times the game's update chain runs a frame once Chef has the game. This addon's own hook (below) is called by that
+-- chain (a link of it, or under MDL3 one of the addon updates MDL3's update calls), so it is counted however the chain is called:
+-- once a frame is from behind Chef's update (below), as it should be; twice means Chef runs the chain as well, which it does only
+-- if it kept it (its log's "running the callbacks ... set before it started me").
 M.chain_runs = 0
 local chain_base, chef_updates = 0, 0
 local function count_frame(...)
@@ -385,11 +428,11 @@ local function count_frame(...)
     elseif runs <= COUNT_FRAMES * 1.1 then
       verdict = 'once a frame: Chef does not run it itself'
     elseif runs >= COUNT_FRAMES * 1.9 and runs <= COUNT_FRAMES * 2.1 then
-      verdict = 'TWICE a frame: Chef runs it as well (it kept it), and so does the game'
+      verdict = 'TWICE a frame: Chef runs it as well (it kept it)'
     else
       verdict = 'neither once nor twice a frame'
     end
-    log('the game\'s update chain ran %d times in Chef\'s first %d updates: %s', runs, COUNT_FRAMES, verdict)
+    log('the game\'s update chain ran %d times in the first %d frames after the hand-off: %s', runs, COUNT_FRAMES, verdict)
   end
   return ...
 end
@@ -409,26 +452,28 @@ local function behind(chef_fn, old, key)
   end
 end
 
--- put the callbacks back: behind Chef's own when Chef started, as they were when it did not. (init: the game called MDL3's
+-- put the callbacks back on T: behind Chef's own when Chef started, as they were when it did not. (init: the game called MDL3's
 -- long ago and does not call it again, Chef's own stays.)
-local function restore_callbacks(saved, chef_started)
+local function restore_callbacks(T, RG, RS, saved, chef_started)
   local kept, back = {}, {}
   for _, k in ipairs(KEYS) do
     local old = saved[k]
-    if old ~= nil then
-      local now = rawget(_G, k)
-      if chef_started and k == 'init' then
-        -- (nothing to put back)
-      elseif chef_started and type(now) == 'function' then
-        rawset(_G, k, behind(now, old, k))
-        kept[#kept + 1] = k
-      else
-        rawset(_G, k, old)
-        back[#back + 1] = k
-      end
+    local now = RG(T, k)
+    local standin = now == STANDIN[k]                   -- (Chef did not set one of its own there)
+    if standin then now = nil end
+    if old == nil then
+      if standin then RS(T, k, nil) end                 -- (a stand-in on a key that had nothing, and Chef set nothing there)
+    elseif chef_started and k == 'init' then
+      if standin then RS(T, k, old) end                 -- (no stand-in is left behind; the game does not call init again)
+    elseif chef_started and type(now) == 'function' then
+      RS(T, k, behind(now, old, k))
+      kept[#kept + 1] = k
+    else
+      RS(T, k, old)
+      back[#back + 1] = k
     end
   end
-  if #kept > 0 then log('the game\'s %s now run behind Chef\'s own, not under it (Chef was not given them to keep)', table.concat(kept, ', ')) end
+  if #kept > 0 then log('the game\'s %s now run behind Chef\'s own (Chef\'s first, then the game\'s)', table.concat(kept, ', ')) end
   if #back > 0 then log('put back as they were: %s', table.concat(back, ', ')) end
 end
 
@@ -443,7 +488,9 @@ local function hook_state()
 end
 
 local function handoff()
-  local running = rawget(_G, 'ChefSharedLoader')
+  local GT, RG, RS, which = game_globals()
+  local running = RG(GT, 'ChefSharedLoader')
+  if running == nil then running = rawget(_G, 'ChefSharedLoader') end
   if running ~= nil then
     M.state = 'chef already running'
     log('Chef Shared Loader is running already (version %s): nothing to do', tostring(field(running, 'version')))
@@ -471,32 +518,51 @@ local function handoff()
   end
   local okr, errr = pcall(release_chef_addons)
   if not okr then log('could not look for Chef addons already started by MDL3: %s', tostring(errr)) end
+  local sandboxed = GT ~= _G
+  local where_cb = sandboxed and ' (its global table)' or ''
   log('handing off: require(\'%s\') with the note { from = ..., phase = \'init\' } (the game has called init long ago)', CORE)
+  log('the game\'s global table: %s', which)
   log('debug hook before: %s', hook_state())
   local oke, envt = pcall(env_text)
   log('around the globals: %s', oke and envt or ('could not tell: ' .. tostring(envt)))
-  local okc, cbt = pcall(callbacks_text)
-  log('the game\'s callbacks before: %s', okc and cbt or ('could not tell: ' .. tostring(cbt)))
+  local okc, cbt = pcall(callbacks_text, nil, GT, RG)
+  log('the game\'s callbacks before%s: %s', where_cb, okc and cbt or ('could not tell: ' .. tostring(cbt)))
+  local standins = guards_new_keys(GT)
+  if standins then
+    log('the game\'s global table guards the keys it does not have: the callbacks are replaced by empty stand-ins while Chef loads, not taken off (Chef keeps the stand-ins)')
+  end
   write_file('chef_handoff_state.txt', 'w', 'attempt ' .. VERSION .. '\n')
-  -- From here until Chef has read the globals nothing runs but rawset and require: no log line, no file. A file write need not
-  -- be a plain C call (a loader can run its own code under a mod's file access), and whatever puts a callback back on the
-  -- globals in that time shows it to Chef. (0.2.1 logged two lines here, and Chef 1.5.1 in the game still found two callbacks.)
-  local saved = stash_callbacks()
+  -- From here until Chef has read the globals nothing runs but rawset and require: no log line, no file (whatever put a callback
+  -- back on the game's table in that time would show it to Chef). The callbacks come off the game's own table, where Chef's core
+  -- reads them, not off this addon's _G: under MDL3 that is a sandbox of its own (0.2.1 and 0.2.2 took them off the sandbox, and
+  -- Chef 1.5.1 in the game still found MDL3's update and shutdown).
+  local saved = stash_callbacks(GT, RG, RS, standins)
   local still = {}
-  for _, k in ipairs(KEYS) do if rawget(_G, k) ~= nil then still[#still + 1] = k end end
-  rawset(_G, 'ChefSharedLoaderHandoff', { from = 'MDL3 chef_handoff ' .. VERSION, phase = 'init' })
+  for _, k in ipairs(KEYS) do
+    local v = RG(GT, k)
+    if standins and v ~= STANDIN[k] or not standins and v ~= nil and saved[k] ~= nil then still[#still + 1] = k end
+  end
+  RS(GT, 'ChefSharedLoaderHandoff', { from = 'MDL3 chef_handoff ' .. VERSION, phase = 'init' })
   local ok, err = pcall(require, CORE)
-  rawset(_G, 'ChefSharedLoaderHandoff', nil)
-  local chef = rawget(_G, 'ChefSharedLoader')
-  if #still > 0 then log('still on the globals right after they were taken off: %s', table.concat(still, ', ')) end
+  RS(GT, 'ChefSharedLoaderHandoff', nil)
+  local chef = RG(GT, 'ChefSharedLoader')
+  if chef == nil then chef = rawget(_G, 'ChefSharedLoader') end
+  if #still > 0 then
+    local on = sandboxed and 'the game\'s global table' or 'the globals'
+    if standins then log('not replaced by the stand-ins on %s: %s', on, table.concat(still, ', '))
+    else log('still on %s right after they were taken off: %s', on, table.concat(still, ', ')) end
+  end
   log('debug hook after: %s', hook_state())
-  local oka, cba = pcall(callbacks_text, saved)
-  log('the game\'s callbacks after Chef loaded: %s', oka and cba or ('could not tell: ' .. tostring(cba)))
+  local oka, cba = pcall(callbacks_text, saved, GT, RG)
+  log('the game\'s callbacks after Chef loaded%s: %s', where_cb, oka and cba or ('could not tell: ' .. tostring(cba)))
   chain_base = M.chain_runs
-  local okb, errb = pcall(restore_callbacks, saved, ok and chef ~= nil)
+  local okb, errb = pcall(restore_callbacks, GT, RG, RS, saved, ok and chef ~= nil)
   if not okb then
     log('putting the callbacks back failed: %s', tostring(errb))
-    for k, f in pairs(saved) do if rawget(_G, k) == nil then rawset(_G, k, f) end end
+    for _, k in ipairs(KEYS) do
+      local v = RG(GT, k)
+      if v == nil or v == STANDIN[k] then RS(GT, k, saved[k]) end
+    end
   end
   if ok and chef ~= nil then
     M.state = 'chef started'

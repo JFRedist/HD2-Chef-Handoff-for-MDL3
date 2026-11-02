@@ -70,7 +70,7 @@ if [ -n "$hl" ]; then
   need 'the game.s callbacks after Chef loaded: init=[^ ]+ \[mods/chef_shared_loader/core_1:[0-9]+\] update=[^ ]+ \[mods/chef_shared_loader/core_1:' "$hl" 'and after it: Chefs own'
   refuse 'still on the globals|the one taken off' "$hl" 'nothing stayed on the globals, and nothing taken off came back before Chef was done'
   need 'around the globals: metatable of _G: none; _G is the global table: yes, this addon runs in it: yes; require: [^ ]+ \[C\]' "$hl" 'it describes the globals and require (the simulators: plain)'
-  need 'the game.s update chain ran 600 times in Chef.s first 600 updates: once a frame' "$hl" 'the other loaders update chain then runs once a frame: Chef does not run it as well'
+  need 'the game.s update chain ran 600 times in the first 600 frames after the hand-off: once a frame' "$hl" 'the other loaders update chain then runs once a frame: Chef does not run it as well'
 else echo '  FAIL  chef_handoff.log was not written'; fails=$((fails + 1)); fi
 if [ -n "$hs" ] && grep -q "^ok $VERRE" "$hs"; then echo '  ok    chef_handoff_state.txt says ok'; else echo '  FAIL  chef_handoff_state.txt does not say ok'; fails=$((fails + 1)); fi
 
@@ -127,6 +127,28 @@ need '\[stand-in mdl3\] shutdown; updates seen: (3[0-9]{3}|[4-9][0-9]{3}); callb
 test "$(grep -c '^\[stand-in mdl3\] shutdown' "$GV")" = 1 && echo '  ok    its shutdown ran once (with 0.2.1: twice, from Chef that kept it and from behind Chef)' \
   || { echo '  FAIL  its shutdown did not run exactly once'; fails=$((fails + 1)); }
 refuse 'GAME CRASH|would have ended| ERR |blocked:' "$GV" 'no crash, no ERR, nothing blocked'
+
+echo '== H: MDL3s sandbox, as the 0.2.2 log showed it in the game (an addons _G is its own; its update and shutdown are its own), and one slow MDL3 update (3.6 s)'
+run_variant h mod_h.json "$FIX/standin_chef_addon.lua" "$FIX/standin_chef_addon_norequires.lua"
+HV="$SCRATCH/h.txt"
+need '\[stand-in mdl3\] mods/jfredist/chef_handoff -> managed' "$HV" 'the stand-in ran the hand-off addon in a sandbox of its own'
+need "started by MDL3 chef_handoff $VERRE, which handed off to me" "$HV" 'the hand-off comes'
+need 'started mods/jfredist/handoff_standin 0\.0\.1' "$HV" 'Chef starts the mods made for it'
+refuse 'running the callbacks the boot script in .* set before it started me' "$HV" 'Chef finds none of MDL3s callbacks on the games globals (0.2.2: it finds 2, as in the game)'
+need '\[stand-in mdl3\] the slow update call ended' "$HV" 'MDL3s slow update call was allowed to finish'
+refuse 'stopped by the hang watchdog|switched off .* for this session' "$HV" 'Chefs hang watchdog did not stop MDL3s update (0.2.2: it does)'
+need '\[stand-in mdl3\] shutdown; updates seen: (3[0-9]{3}|[4-9][0-9]{3}); addon updates: (3[0-9]{3}|[4-9][0-9]{3})' "$HV" 'MDL3s update, and the addons it calls, ran every frame to the end'
+test "$(grep -c '^\[stand-in mdl3\] shutdown' "$HV")" = 1 && echo '  ok    MDL3s shutdown ran once' || { echo '  FAIL  MDL3s shutdown did not run exactly once'; fails=$((fails + 1)); }
+refuse 'GAME CRASH|would have ended| ERR |blocked:' "$HV" 'no crash, no ERR, nothing blocked'
+hl=$(kept "$SCRATCH/keep_h" 'chef_handoff.log')
+if [ -n "$hl" ]; then
+  need 'around the globals: metatable of _G: __index=[^ ]+ \[boot:[0-9]+\] __newindex=[^ ]+ \[boot:[0-9]+\]; _G is the global table: no, this addon runs in it: no' "$hl" 'chef_handoff.log: it sees the sandbox as in the game'
+  need 'the game.s global table: getfenv\(0\)' "$hl" 'and works on the games global table, not its own _G'
+  need 'the game.s callbacks before \(its global table\): init=[^ ]+ \[boot:[0-9]+\] update=[^ ]+ \[boot:[0-9]+\] render=[^ ]+ \[boot:[0-9]+\] shutdown=[^ ]+ \[boot:[0-9]+\]' "$hl" 'it names MDL3s own callbacks there'
+  refuse 'still on the game.s global table' "$hl" 'all of them came off that table'
+  need 'the game.s callbacks after Chef loaded \(its global table\): init=[^ ]+ \[mods/chef_shared_loader/core_1:[0-9]+\] update=[^ ]+ \[mods/chef_shared_loader/core_1:' "$hl" 'after Chef loaded: Chefs own there'
+  need 'the game.s update chain ran 600 times in the first 600 frames after the hand-off: once a frame' "$hl" 'MDL3s update ran once a frame, not also inside Chef'
+else echo '  FAIL  chef_handoff.log was not written'; fails=$((fails + 1)); fi
 
 echo '== C: the other loader hands off to Chef itself, in its boot: the addon leaves it alone'
 run_variant c mod_c.json "$FIX/standin_chef_addon.lua" "$FIX/standin_chef_addon_norequires.lua"

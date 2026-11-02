@@ -141,6 +141,109 @@ local function game(opts)
   return G
 end
 
+-- MDL3's sandbox, as the real run of 0.2.2 showed it (tests/fixtures/handoff/mdl3_boot_h.lua is the same for Chef's simulator):
+-- the game's globals GT hold MDL3's own update, render and shutdown (MDL3's update calls each addon's own update, its shutdown each
+-- addon's shutdown). The addon runs in a proxy P: its _G is P; update and shutdown are its own (taking update off puts MDL3's
+-- stand-in back, taking shutdown off does nothing), init is its own and unset, everything else is GT's; getfenv(0) is GT.
+-- Chef's core (the fake one) reads its globals from GT, as require gives a chunk the running thread's globals.
+local function sandbox_game(opts)
+  opts = opts or {}
+  local dir = OUT .. '/' .. opts.name
+  os.execute('rm -rf "' .. dir .. '" && mkdir -p "' .. dir .. '"')
+  local base = dir .. '/A'
+  local G = { t = 0, order = {}, record = false, mdl3_updates = 0, required = {} }
+  local GT = {}
+  for _, name in ipairs({ 'rawget', 'rawset', 'type', 'pcall', 'tostring', 'tonumber', 'ipairs', 'pairs', 'select', 'error',
+                          'string', 'table', 'math', 'getmetatable' }) do GT[name] = _G[name] end
+  GT._G = GT
+  GT.os = { getenv = function(k) if k == 'APPDATA' then return base end end, date = os.date, clock = os.clock }
+  GT.io = { open = function(path, mode)
+    if type(path) == 'string' and path:match('^data/') then return nil, 'no such file' end
+    return io.open(path, mode)
+  end }
+  GT.package = { loaded = {} }
+  GT.debug = { getinfo = debug.getinfo, gethook = function() return nil end }
+  GT.stingray = { Application = { can_get = function(kind, name) return kind == 'lua' and name == CORE end } }
+  GT.CowboyBingusModLoader = { modules = {} }
+  local SLOT = { init = true, update = true, shutdown = true }
+  local function default_update() end
+  local function default_shutdown() G.addon_shutdowns = (G.addon_shutdowns or 0) + 1 end
+  local slots = { update = default_update, shutdown = default_shutdown }
+  local P = {}
+  local get, put
+  local function sb_rawget(t, k) if t == P then return get(k) end return rawget(t, k) end
+  local function sb_rawset(t, k, v) if t == P then put(k, v); return t end return rawset(t, k, v) end
+  local fake_gt = opts.gt_without_stingray and {} or GT
+  local function sb_getfenv(x) if x == 0 then return fake_gt end return getfenv(x) end
+  get = function(k)
+    if k == '_G' then return P end
+    if k == 'rawget' then return sb_rawget end
+    if k == 'rawset' then return sb_rawset end
+    if k == 'getfenv' then return sb_getfenv end
+    if SLOT[k] then return slots[k] end
+    return rawget(GT, k)
+  end
+  put = function(k, v)
+    if k == 'update' then slots.update = v or default_update
+    elseif k == 'shutdown' then if v ~= nil then slots.shutdown = v end
+    elseif k == 'init' then slots.init = v
+    else rawset(GT, k, v) end
+  end
+  setmetatable(P, { __index = function(_, k) return get(k) end, __newindex = function(_, k, v) put(k, v) end })
+  GT.update = function(dt)
+    G.mdl3_updates = G.mdl3_updates + 1
+    G.mdl3_inside_chef = G.mdl3_inside_chef or G.in_chef
+    if G.record then G.order[#G.order + 1] = 'mdl3 update' end
+    slots.update(dt)
+  end
+  GT.render = function() if G.record then G.order[#G.order + 1] = 'mdl3 render' end end
+  GT.shutdown = function()
+    if G.record then G.order[#G.order + 1] = 'mdl3 shutdown' end
+    G.mdl3_shutdowns = (G.mdl3_shutdowns or 0) + 1
+    slots.shutdown()
+  end
+  G.mdl3 = { update = GT.update, render = GT.render, shutdown = GT.shutdown }
+  if opts.gt_newindex then                 -- a guard on the game's table that takes callbacks set on missing keys for itself
+    G.swallowed = {}
+    setmetatable(GT, { __newindex = function(t, k, v)
+      if k == 'init' or k == 'update' or k == 'render' or k == 'shutdown' then G.swallowed[k] = v else rawset(t, k, v) end
+    end })
+  end
+  GT.require = function(name)
+    G.required[#G.required + 1] = name
+    if opts.require_error then error('core failed: boom') end
+    if name ~= CORE then error('module not found: ' .. tostring(name)) end
+    G.note = rawget(GT, 'ChefSharedLoaderHandoff')
+    G.chef_saw = {}
+    local kept = {}
+    for _, k in ipairs({ 'init', 'update', 'render', 'shutdown' }) do G.chef_saw[k] = rawget(GT, k) ~= nil; kept[k] = rawget(GT, k) end
+    G.kept = kept
+    GT.ChefSharedLoader = newproxy(true)
+    getmetatable(GT.ChefSharedLoader).__index = { version = '1.5.1', api = 1 }
+    GT.init = function() end
+    GT.update = function(dt)                 -- like Chef: its own, then the callbacks it kept, as a boot script's
+      G.in_chef = true
+      if G.record then G.order[#G.order + 1] = 'chef update' end
+      if kept.update then kept.update(dt) end
+      G.in_chef = false
+    end
+    GT.render = function() if G.record then G.order[#G.order + 1] = 'chef render' end; if kept.render then kept.render() end end
+    GT.shutdown = function() if G.record then G.order[#G.order + 1] = 'chef shutdown' end; if kept.shutdown then kept.shutdown() end end
+    return true
+  end
+  local chunk = assert(loadfile(ADDON))
+  setfenv(chunk, P)
+  G.module = chunk()
+  G.GT, G.P, G.slots = GT, P, slots
+  G.hook = slots.update
+  G.path = function(name) return base .. '\\Arrowhead\\Helldivers2\\' .. name end
+  function G.frames(seconds, dt)
+    dt = dt or 1 / 60
+    for _ = 1, math.floor(seconds / dt + 0.5) do G.t = G.t + dt; GT.update(dt) end
+  end
+  return G
+end
+
 print('== the normal case: Chef installed, MDL3 above it')
 local G = game{ name = 'normal' }
 check(type(G.module) == 'table' and G.module.version == VER, 'the addon returns its module table')
@@ -206,7 +309,7 @@ G = game{ name = 'count_once' }
 G.frames(7)
 G.frames(11)
 local clog = read(G.path('chef_handoff.log')) or ''
-check(clog:find('ran 600 times in Chef\'s first 600 updates: once a frame', 1, true), 'normally once a frame, and the log says so')
+check(clog:find('ran 600 times in the first 600 frames after the hand-off: once a frame', 1, true), 'normally once a frame, and the log says so')
 G = game{ name = 'count_twice', core_sees_through = true }
 G.frames(5)
 G.sneak = G.env.update                               -- the chain as it is just before the hand-off
@@ -214,7 +317,7 @@ G.frames(2)
 local u0 = G.updates
 G.frames(11)
 clog = read(G.path('chef_handoff.log')) or ''
-check(clog:find('ran 1200 times in Chef\'s first 600 updates: TWICE a frame', 1, true), 'if Chef runs the chain as well: twice, and the log says so')
+check(clog:find('ran 1200 times in the first 600 frames after the hand-off: TWICE a frame', 1, true), 'if Chef runs the chain as well: twice, and the log says so')
 check(G.updates - u0 == 1320, 'which is what happened (' .. (G.updates - u0) .. ' runs in 660 frames)')
 G = game{ name = 'count_onupdate', update = false, on_update = true }
 for _ = 1, 1200 do G.on_update.fn(1 / 60) end
@@ -247,6 +350,62 @@ local order_ok = true
 local p1, p2, p3 = dlog:find('callbacks before', 1, true), dlog:find('debug hook after', 1, true), dlog:find('after Chef loaded', 1, true)
 if not (p1 and p2 and p3 and p1 < p2 and p2 < p3) then order_ok = false end
 check(order_ok, 'the lines come in order: before, then after the hand-off')
+
+print('== MDL3\'s sandbox (the real MDL3, as the 0.2.2 log showed it): the callbacks come off the game\'s own table')
+G = sandbox_game{ name = 'sandbox' }
+check(G.module and G.module.state == 'waiting' and G.hook ~= nil, 'the addon loads in the sandbox and hooks its own update there')
+G.frames(7)
+check(G.module.state == 'chef started' and #G.required == 1, 'the hand-off happens once')
+check(type(G.note) == 'table' and G.note.phase == 'init', 'Chef finds the note on the game\'s table, where it reads its globals')
+check(G.chef_saw and not (G.chef_saw.update or G.chef_saw.render or G.chef_saw.shutdown),
+  'Chef finds none of MDL3\'s update, render, shutdown there (0.2.2 took them off the sandbox, and Chef found update and shutdown)')
+check(G.GT.ChefSharedLoaderHandoff == nil, 'the note is gone afterwards')
+check(G.slots.update == G.hook, 'the addon\'s own update in the sandbox is left alone')
+G.record, G.order = true, {}
+G.GT.update(1 / 60); G.GT.render(); G.GT.shutdown()
+check(table.concat(G.order, ',') == 'chef update,mdl3 update,chef render,mdl3 render,chef shutdown,mdl3 shutdown',
+  'the game\'s callbacks: Chef\'s first, then MDL3\'s (' .. table.concat(G.order, ',') .. ')')
+check(not G.mdl3_inside_chef, 'MDL3\'s update is not called from inside Chef\'s (where Chef 1.5\'s watchdog would time it)')
+G.record = false
+local u0, n0 = G.mdl3_updates, #G.required
+G.frames(11)
+check(G.mdl3_updates - u0 == 660 and #G.required == n0, 'MDL3\'s update runs once a frame, and there is no second hand-off')
+local slog = read(G.path('chef_handoff.log')) or ''
+check(slog:find('the game\'s global table: getfenv(0) (this addon\'s _G is a sandbox of its own, not the global table)', 1, true),
+  'the log says which table it used')
+check(slog:find('  the game\'s callbacks (its global table): init=nil update=', 1, true)
+  and slog:find('the game\'s callbacks before %(its global table%): init=nil update=[^ ]+ %[tests/test_handoff%.lua:%d+%]'),
+  'and what was on it, at load and before the hand-off: MDL3\'s own')
+check(not slog:find('still on', 1, true) and not slog:find('the one taken off', 1, true), 'all came off, none came back while Chef loaded')
+check(slog:find('the game\'s callbacks after Chef loaded (its global table): init=', 1, true), 'and what was on it after Chef loaded')
+check(slog:find('metatable of _G: __index=', 1, true) and slog:find('metatable of the global table: none', 1, true), 'it describes both tables')
+check(slog:find('ran 600 times in the first 600 frames after the hand-off: once a frame', 1, true), 'the count says once a frame')
+
+G = sandbox_game{ name = 'sandbox_fail', require_error = true }
+G.frames(7)
+check(G.module.state == 'hand-off failed' and G.GT.update == G.mdl3.update and G.GT.render == G.mdl3.render and G.GT.shutdown == G.mdl3.shutdown,
+  'in the sandbox, a core that fails leaves MDL3\'s callbacks on the game\'s table as they were')
+G.frames(1)
+check(G.mdl3_updates > 0, 'and MDL3 goes on')
+
+G = sandbox_game{ name = 'sandbox_nostingray', gt_without_stingray = true }
+G.frames(7)
+check(G.module.state == 'chef started' and (read(G.path('chef_handoff.log')) or ''):find('without the engine\'s stingray in it', 1, true),
+  'a getfenv(0) that is not the game\'s table (no stingray in it) is not used: the hand-off works as before, and the log says why')
+
+G = sandbox_game{ name = 'sandbox_guard', gt_newindex = true }
+G.frames(7)
+local glog2 = read(G.path('chef_handoff.log')) or ''
+check(glog2:find('guards the keys it does not have: the callbacks are replaced by empty stand-ins', 1, true),
+  'a game table that guards its missing keys (__newindex): the log says the callbacks are replaced by stand-ins, not taken off')
+check(G.module.state == 'chef started' and next(G.swallowed) == nil, 'Chef\'s own callbacks land on the table (none went to the guard)')
+check(G.kept and type(G.kept.update) == 'function' and G.kept.update ~= G.mdl3.update and G.kept.shutdown ~= G.mdl3.shutdown,
+  'what Chef keeps are the stand-ins, not MDL3\'s')
+G.record, G.order = true, {}
+G.GT.update(1 / 60); G.GT.render(); G.GT.shutdown()
+check(table.concat(G.order, ',') == 'chef update,mdl3 update,chef render,mdl3 render,chef shutdown,mdl3 shutdown' and not G.mdl3_inside_chef,
+  'and the callbacks run Chef\'s first, then MDL3\'s, outside Chef (' .. table.concat(G.order, ',') .. ')')
+check(not glog2:find('still on', 1, true), 'nothing was left on the table but the stand-ins')
 
 print('== the core fails to load: the callbacks are put back as they were')
 G = game{ name = 'fails_cb', require_error = true }

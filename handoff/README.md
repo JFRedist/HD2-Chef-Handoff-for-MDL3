@@ -70,14 +70,15 @@ Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次�
 
 1. 你已经有：MDL3 和它的 mod（BF5 反馈）、Chef Shared Loader（1.2.0 以上；真机上测过 1.4.1 和 1.5.1，**1.5.x 请用 0.2.3**）、HUDdle 等 Chef 的 mod。
 2. 把 `dist/Chef-Hand-off-for-MDL3-0.2.3.zip` 加进 Arsenal / HD2 Mod Manager 并启用。
-3. **优先级：MDL3 的优先级要比 Chef 高**（说的是优先级，不是"先加载"：优先级高的那个启动器，游戏才会运行它）。其余 mod 的顺序没关系。
+3. **优先级：MDL3 的优先级要比 Chef 高**（说的是优先级，不是"先加载"：优先级高的那个启动器，游戏才会运行它）。其余 mod 的顺序没关系（本 mod 见下一步）。
    Chef 和 HUDdle 的说明都要求 Chef 的优先级最高，这里正相反：游戏运行的 boot 必须是 MDL3 的。
    在 Arsenal 里怎么摆，看它的设置：
    - **First mod highest priority**（第一个优先级最高）：列表越靠上优先级越高，MDL3 放在 Chef **上面**。
    - **Last mod highest priority**（最后一个优先级最高）：列表越靠下优先级越高，MDL3 放在 Chef **下面**。
-   - 拿不准的话：你原来把 Chef 放在"最高优先级"的那个位置；现在把 MDL3 放到那个位置，Chef 挪到它旁边的一格。
-4. **Purge**，再 **Deploy**。
-5. 启动游戏，在标题画面停 10 秒以上，再进一局任务。
+   - 拿不准的话：你原来把 Chef 放在"最高优先级"的那个位置；现在把 MDL3 放到那个位置，Chef 挪到它附近，中间放本 mod（下一步）。
+4. 建议把本 mod 放在 MDL3 和 Chef 之间。
+5. **Purge**，再 **Deploy**。
+6. 启动游戏，在标题画面停 10 秒以上，再进一局任务。
 
 运行起来的顺序其实是：MDL3 先运行（游戏运行的是它的 boot），它启动本 mod，6 秒后本 mod 再启动 Chef。这是结果，不是你要在 Arsenal 里摆出来的东西。
 

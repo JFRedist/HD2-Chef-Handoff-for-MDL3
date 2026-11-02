@@ -1,5 +1,7 @@
 # 探针第一次真机运行（0.1.0）的结果
 
+> **历史记录。** 这是已放弃的 Chef 版 BF5 研究的一部分（见 [`chef-feasibility.md`](chef-feasibility.md) 开头的说明），之后没有再更新。现在的项目见 [README](../README.md)。
+
 数据来自你上传的四个文件（`bfv_probe.log`、`bfv_probe_api.txt`、`bfv_probe_summary.txt`、`chef_loader.log`）。
 下面的数字是我从这些文件里重新数出来的，不是估计。
 

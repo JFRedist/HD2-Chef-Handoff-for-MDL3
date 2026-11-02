@@ -1,5 +1,9 @@
 # 在 MDL3 下运行 HUDdle：让 Chef 在 MDL3 里启动
 
+**状态**：交接 addon（0.2.0）在真机上可用（MDL3 3.0.0-dev.29，Chef 1.4.1，HUDdle 0.6.11，BF5 击杀反馈 MDL3 版）。
+还没有确认的两件事：Treasure Radar 在 0.2.0 下真机是否出现；任务中 ESC 回飞船闪退过一次（0.1.0），原因没找到，之后没有再出现。见本文末尾的"还没有确认的"。
+使用说明在 [`handoff/README.md`](../handoff/README.md)，项目概览在 [`README.md`](../README.md)。
+
 ## 问题
 
 HUDdle（Nexus 18108，作者 rosensterner）是 **Chef Shared Loader** 的 addon，没有 MDL3 版：
@@ -57,8 +61,8 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 | 检查 | 内容 |
 |---|---|
 | `tests/test_handoff.lua`（64 项） | 假游戏里：6 秒前不交接、之后交接一次、便条内容、状态文件、日志、`update` 链保持；Chef 没装 / 已在运行 / 上次崩溃 / 核心报错 / 各种奇怪的游戏（没有 `can_get`、没有 `update`、坏 dt、加载两次、没有文件夹）。Chef 的全局在假游戏里是只读代理（像真的一样），这一点是真实 Chef 的模拟器测试抓出来的 |
-| `tests/handoff_sim.sh`（真实的 Chef，Chef 自带的模拟器） | **A** 假 MDL3 在 `init` 里启动 addon；**B** 假 MDL3 在 `boot` 里启动 addon，并先用普通 `require` 试 Chef 的 mod（登记在 Bingus 式的 `modules` 表里）；**E** 同 B，但只留下 `package.loaded`（真实 MDL3 那一次显示的样子）；**C** 假 MDL3 自己已经交接。 B、E 里有一个像 Treasure Radar 的替身（没有 `HD2-Requires` 头，普通 `require` 不报错）：0.1.0 会把它漏掉（和真机日志里同一句 `already started by another loader (started)`），0.2.0 启动它。检查：Chef 报告被谁交接、自己的 boot stub 没有运行、Chef 的 mod 启动并绘制、交接 addon 不会被 Chef 再启动一次、假 MDL3 的回调（3 个，没有 `init`）每帧照常运行（60 秒约 3600 次）、游戏的 `init` 恰好一次、日志和状态文件。可选 **D**：设置 `HUDDLE_LUA` 用真实的 HUDdle 0.6.11（不在仓库里） |
-| 变异检查 | 故意改坏 9 处（没有延迟、没有 `phase`、不检查 Chef 在运行、忽略崩溃标记、不 `pcall`、不写 ok 标记、丢参数、不清便条、不检查 Chef 是否安装）：自写测试全部抓到；模拟器测试抓到其中会影响真实 Chef 行为的三处（延迟、`phase`、已在运行的检查） |
+| `tests/handoff_sim.sh`（真实的 Chef 1.4.1，Chef 自带的模拟器；48 项，加上 D 是 52 项） | **A** 假 MDL3 在 `init` 里启动 addon；**B** 假 MDL3 在 `boot` 里启动 addon，并先用普通 `require` 试 Chef 的 mod（登记在 Bingus 式的 `modules` 表里）；**E** 同 B，但只留下 `package.loaded`（真实 MDL3 那一次显示的样子）；**C** 假 MDL3 自己已经交接。 B、E 里有一个像 Treasure Radar 的替身（没有 `HD2-Requires` 头，普通 `require` 不报错）：0.1.0 会把它漏掉（和真机日志里同一句 `already started by another loader (started)`），0.2.0 启动它。检查：Chef 报告被谁交接、自己的 boot stub 没有运行、Chef 的 mod 启动并绘制、交接 addon 不会被 Chef 再启动一次、假 MDL3 的回调（3 个，没有 `init`）每帧照常运行（60 秒约 3600 次）、游戏的 `init` 恰好一次、日志和状态文件。可选 **D**：设置 `HUDDLE_LUA` 用真实的 HUDdle 0.6.11（不在仓库里） |
+| 变异检查（一次性的手工检查，脚本没有放进仓库） | 0.1.0：故意改坏 9 处（没有延迟、没有 `phase`、不检查 Chef 在运行、忽略崩溃标记、不 `pcall`、不写 ok 标记、丢参数、不清便条、不检查 Chef 是否安装）：自写测试全部抓到；模拟器测试抓到其中会影响真实 Chef 行为的三处（延迟、`phase`、已在运行的检查）。0.2.0 又加了 11 处（补丁文件的读法、判断做给 Chef 的规则、摘掉的范围等），自写测试全部抓到，只有一个防御性的等价变异除外 |
 
 ## 第一次真机结果（2026-11-02，MDL3 3.0.0-dev.29，Chef 1.4.1）
 
@@ -74,7 +78,7 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 - **发现一：Chef 的 mod 如果没有 `HD2-Requires: chef-shared-loader` 头，并且被 MDL3 用普通 `require` 启动时没有报错，Chef 会认为它"已经被别的加载器启动"而跳过。**
   Treasure Radar（`local chef = ...` 之后只在函数里用 `chef.`）就是这样：日志里 `mods/chef/treasure_radar: already started by another loader (started), not started again`，实际没有运行。
   HUDdle 因为加载时就报错（`attempt to call field 'time' (a nil value)`），被当作失败而被 Chef 启动。修法：交接前把这类 mod 从 `package.loaded` 里摘掉（还没做）。
-- **发现二（未解决）：任务中按 ESC 回飞船，游戏闪退。** `chef_loader.log` 里任务开始 27 秒后就是 `shutdown (clean)`，没有 Chef 在回飞船时平时会记的下一个世界（"world 5: not a mission (24 units, 0 levels)"）：
+- **发现二（只出现过一次，没有找到原因）：任务中按 ESC 回飞船，游戏闪退。** `chef_loader.log` 里任务开始 27 秒后就是 `shutdown (clean)`，没有 Chef 在回飞船时平时会记的下一个世界（"world 5: not a mission (24 units, 0 levels)"）：
   游戏没有切换场景，直接走了退出流程。同一个日志里，只用 Chef 的那些启动（多次任务来回）回飞船都正常。
   模拟器里同样的安排（假 MDL3 + 交接 + 真 HUDdle）加"任务中途换世界"没有崩溃，所以 Chef 自己的世界切换逻辑不是原因；是 MDL3 预览版自己、HD2 Data Hub、
   交接、还是 HUDdle 与 MDL3 的相互影响，需要隔离实验（见下一次来回的结果）。
@@ -101,15 +105,45 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 找 `-- HD2-Addon:` 头，并且（行首的 `local chef = ...`，或 `-- HD2-Requires: chef-shared-loader` 头行）的，就是做给 Chef 的。把它们从 `package.loaded`
 （和加载器的 `modules` 表里状态是 loaded / loading 的）里摘掉，再交接。读不了补丁时用内置的两个名字（Treasure Radar、HUDdle）。
 
-## 没有验证的，和怎么从日志判断
+## 第三次真机结果（2026-11-02，0.2.0）
 
-- **MDL3 的 mod（BF5 反馈）和交接一起用。** 交接本身已在真实的 MDL3 上成功（见上），但还没有和 MDL3 的 mod 一起试过。如果出问题，看 `chef_handoff.log`：
-  - 没有这个文件：MDL3 没启动 addon。需要 MDL3 自己的说明（请上传 MDL3 的包）。
-  - 有，但 `update` 不是 function：MDL3 用别的方式调用 addon，日志开头的表里能看出 MDL3 暴露了什么。
-  - `not installed`：看 Chef 的补丁是不是被部署了。
-  - `started`，但游戏里没有 HUDdle：看 `chef_loader.log` 里 HUDdle 的行。
-- **Chef 把 MDL3 的 mod 又启动一份**（MDL3 没把已启动的 mod 登记到 Chef 会看的地方时）：看 `chef_loader.log` 有没有 `started mods/test_author/battlefield5_kill_feedback`。
-- **Chef 在运行中途才启动**：模拟器里没问题；真实游戏里 Chef 的世界检测、GUI 创建是否有影响，要看实际。
+作者的试玩报告，**没有传日志**：
+
+- **任务中按 ESC 回飞船没有闪退。**
+- **BF5 反馈（MDL3 版）正常。**
+- Treasure Radar 是否出现，没有说；真机待确认（见下）。
+
+## ESC 回飞船闪退：知道什么，不知道什么
+
+三次相关的真机运行（时间是 Chef 日志里的本地时间）：
+
+| 运行 | 版本 | BF5 反馈 | 做了什么 | 结果 |
+|---|---|---|---|---|
+| 02:16 | 0.1.0 | **没装**：Chef 日志里 87 个补丁文件，没有 BF5 的全局表 `__KILL_FEEDBACK_MOD`，也没有"一个 Lua 超过 4 MB"那一行；作者当时说还没试 MDL3 的 mod | 任务开始后约 27 秒按 ESC 回飞船 | 游戏退出；Chef 日志 `shutdown (clean)`，没有下一个世界 |
+| 02:24 | 0.1.0 | 装了：91 个补丁文件，有 `__KILL_FEEDBACK_MOD` | 完成任务，正常结算 | 世界 3 任务 → 4 加载 → 5 飞船，退出时 `shutdown (clean)`；没有问题 |
+| （之后） | 0.2.0 | 装了 | 按 ESC 回飞船 | 没有闪退（作者的报告，没有日志） |
+
+- 只出现过一次，原因没有找到。那一次 HUDdle 的日志到退出前一切正常（最后是 `HUD woke from calm`，1.3 秒后 `bye`），Chef 的日志是 `shutdown (clean)`：游戏自己走了退出流程，Chef 没有崩。
+- 0.2.0 没有做任何针对它的改动（它只在交接前摘掉 `package.loaded` 里几个 Chef mod 的名字，让 Chef 多启动 Treasure Radar 之类），所以不能说是 0.2.0 修好的。
+- 能确定的只有：出现的那一次没有装 BF5，之后装了 BF5 的几次（正常结算、ESC）都没有出现。这可能是巧合，也可能不是；样本太少，没有结论。
+- 模拟器里同样的安排（假 MDL3 + 交接 + 真 HUDdle）加"任务中途换世界"不崩，所以 Chef 自己的世界切换逻辑不是原因。
+- 再出现时：先把 `MDL.log` 拷出来再重开游戏（它每次启动会被覆盖），连同 `chef_loader.log`、`chef_handoff.log` 一起留着。
+
+## 还没有确认的
+
+- **Treasure Radar 在 0.2.0 下真机是否出现。** 模拟器里 0.1.0 复现了真机日志里的 `already started by another loader (started)`，0.2.0 启动了它；真机要看 `chef_loader.log` 里有没有 `started mods/chef/treasure_radar`，和游戏里的雷达。
+- **ESC 闪退的原因。** 见上。
+- **别的 MDL3 版本。** 只在 MDL3 3.0.0-dev.29（"protected preview"）上测过。MDL3 以后怎么启动 addon、给 addon 什么全局，可能会变；`chef_handoff.log` 开头列出的全局表能看出变化。
+- **别的 Chef mod。** 真机上只有 HUDdle 0.6.11 和 Treasure Radar 0.7.1n。其它 Chef mod 只在模拟器里用替身测过。
+- **更长的运行。** 我手上带交接的真机日志里，最长一次约 12 分钟（一局任务）。
+
+## 已经有答案的（原来的疑问）
+
+- **MDL3 会启动 addon 吗？** 会：所有带 `HD2-Addon` 头的 Lua，包括交接 addon，也包括 Chef 的 mod（见第二次真机结果）。
+- **Chef 会把 MDL3 的 mod 再启动一份吗？** 真机上没有。MDL3 启动过的 addon 在 `package.loaded` 里，被 Chef 跳过（日志里的 `hd2_data_hub`）；BF5 反馈的 Lua 有 6 MB，Chef 不读超过 4 MB 的 Lua。
+  如果哪个 MDL3 的 mod 被再启动了，`chef_loader.log` 里会有 `started mods/<作者>/<名字>`。
+- **Chef 在游戏运行 6 秒才启动，它的世界检测和 GUI 受影响吗？** 真机上没有：识别了任务世界，引擎三角形绘制正常，HUDdle 平均 0.7 毫秒/帧。
+- **BF5 反馈（MDL3）和交接一起用？** 0.1.0 的 `MDL.log`：它被 MDL3 启用并注册了选项；0.2.0 作者报告正常。
 
 ## 许可
 

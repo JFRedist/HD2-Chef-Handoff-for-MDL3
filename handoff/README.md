@@ -1,6 +1,6 @@
 # Chef Hand-off for MDL3 0.2.0
 
-让 **Chef Shared Loader**（以及只能在它上面运行的 mod，比如 **HUDdle**）和 **MDL3**（以及 BF5 反馈这类 MDL3 mod）在同一个游戏里一起工作。
+让 **Chef Shared Loader**（以及只能在它上面运行的 mod，比如 **HUDdle**、**Treasure Radar**）和 **MDL3**（以及 BF5 反馈这类 MDL3 mod）在同一个游戏里一起工作。
 
 ## 为什么需要它
 
@@ -15,14 +15,14 @@ Chef 的文档（"For other loaders"）给其它加载器留了一个交接办�
 
 ## 0.2.0 比 0.1.0 多了什么
 
-第一次真机运行（见 `docs/chef-under-mdl3.md`）显示：MDL3 会把**所有**带 `HD2-Addon` 头的 Lua 都启动一遍，包括 Chef 的 mod，只是给它们的不是 Chef。
+第一次真机运行（见 [`docs/chef-under-mdl3.md`](../docs/chef-under-mdl3.md)）显示：MDL3 会把**所有**带 `HD2-Addon` 头的 Lua 都启动一遍，包括 Chef 的 mod，只是给它们的不是 Chef。
 HUDdle 在这种启动里会报错，所以 Chef 之后正常启动了它；Treasure Radar 没报错，MDL3 就当它已经在运行，Chef 看到后也跳过了它，所以 Treasure Radar 一直没有运行。
 0.2.0 在交接前读游戏的补丁文件（Chef 自己也这样读），找出做给 Chef 的 addon，把它们从 `package.loaded`（以及加载器自己的 `modules` 表，如果有）里摘掉，Chef 就会正常启动它们。
-MDL3 的列表里这些 mod 仍然会显示"加载失败"或"已启用"，这是 MDL3 对它们的看法，不影响 Chef 运行它们。
+MDL3 自己仍然是按它的方式看这些 mod 的（它的 `MDL.log` 里 HUDdle 是 `enable failed`，Treasure Radar 是 `enabled`），这不影响 Chef 运行它们。
 
 ## 安装
 
-1. 你已经有：MDL3 和它的 mod（BF5 反馈）、Chef Shared Loader（1.2.0 以上）、HUDdle。
+1. 你已经有：MDL3 和它的 mod（BF5 反馈）、Chef Shared Loader（1.2.0 以上）、HUDdle 等 Chef 的 mod。
 2. 把 `dist/Chef-Hand-off-for-MDL3-0.2.0.zip` 加进 Arsenal / HD2 Mod Manager 并启用。
 3. **优先级：MDL3 的优先级要比 Chef 高**（说的是优先级，不是"先加载"：优先级高的那个启动器，游戏才会运行它）。其余 mod 的顺序没关系。
    Chef 和 HUDdle 的说明都要求 Chef 的优先级最高，这里正相反：游戏运行的 boot 必须是 MDL3 的。
@@ -49,30 +49,32 @@ MDL3 的列表里这些 mod 仍然会显示"加载失败"或"已启用"，这是
 | 现象 | 多半是 |
 |---|---|
 | BF5 反馈（MDL3）正常，HUDdle 没有 | MDL3 的优先级是对的，交接没成功：看 `chef_handoff.log` |
-| HUDdle 正常，BF5 反馈（MDL3）没有 | Chef 的优先级还是高的（顺序摆反了）：把 MDL3 放到更高优先级，Purge 再 Deploy |
+| HUDdle 正常，BF5 反馈（MDL3）没有（也没有 `chef_handoff.log`） | Chef 的优先级还是高的（顺序摆反了）：把 MDL3 放到更高优先级，Purge 再 Deploy |
 | 两个都没有 | 看 `chef_handoff.log` 和 `chef_loader.log` |
 
 ## 日志里的状态
 
 | `chef_handoff.log` 里 | 意思 |
 |---|---|
-| 文件不存在 | MDL3 没有启动这个 mod（请把 MDL3 的 zip 也传给我，让我看它怎么启动 mod） |
+| 文件不存在 | MDL3 没有运行，或者没有启动这个 mod：多半是 Chef 的优先级更高（上一节），也可能这个 mod 没有启用或没有部署 |
 | `Chef Shared Loader ... started` | 成功 |
 | `Chef Shared Loader is not installed` | 游戏里找不到 Chef 的核心：Chef 没装、没部署，或者被禁用了 |
 | `Chef Shared Loader is running already` | Chef 已经在运行（MDL3 自己交接了，或者 Chef 排在最上面），本 mod 什么也没做 |
 | `the last launch ended during the hand-off` | 上次启动在交接过程中结束（崩溃）。为了不反复崩，这次没有再试。删掉同一文件夹里的 `chef_handoff_state.txt` 可以再试一次 |
 | `the hand-off did not start Chef (require false: ...)` | Chef 的核心报错，原因在括号里 |
 
-## 不行的话，发给我
+## 出问题时，需要这些文件
 
-`chef_handoff.log`、`chef_loader.log`，如果有 `chef_handoff_state.txt`，再加一句现象：游戏起不来 / 崩溃 / 进游戏没有 HUDdle / BF5 没反应。
-`chef_handoff.log` 开头会列出 MDL3 给 mod 的那些全局表（`CowboyBingusModLoader`、`MDL3`、`HD2Data` ……）里有什么，这能让我对着 MDL3 的真实情况改。
+`chef_handoff.log`、`chef_loader.log`，MDL3 的 `MDL.log`，如果有 `chef_handoff_state.txt`，再加一句现象：游戏起不来 / 崩溃 / 进游戏没有 HUDdle / BF5 没反应。
+`MDL.log` 每次启动都会被覆盖：闪退后先把它拷出来，再重开游戏。
+`chef_handoff.log` 开头会列出 MDL3 给 mod 的那些全局表（`CowboyBingusModLoader`、`MDL3`、`HD2Data` ……）里有什么，MDL3 换了版本之后，这能看出它变了什么。
 
 ## 可能的副作用
 
 - Chef 启动时（第 6 秒左右，一般在标题画面）会有几十毫秒的卡顿。
-- Chef 会把所有带 `HD2-Addon` 头的 mod 都看一遍，已经由 MDL3 启动的它会跳过（靠 `package.loaded` 和 MDL3 登记的列表）。如果 MDL3 没登记，Chef 会把 BF5 反馈再启动一份。
-  看 `chef_loader.log` 里有没有 `started mods/test_author/battlefield5_kill_feedback`，有的话告诉我；在 Chef 的 F9 菜单里可以先把它关掉。
+- Chef 会把所有带 `HD2-Addon` 头的 mod 都看一遍，已经由 MDL3 启动的它会跳过（靠 `package.loaded` 和 MDL3 登记的列表）；真机日志里能看到 `hd2_data_hub` 这类被跳过。BF5 反馈的 Lua 有 6 MB，Chef 不读超过 4 MB 的 Lua。
+  如果哪个 MDL3 的 mod 被 Chef 再启动了一份，`chef_loader.log` 里会有 `started mods/<作者>/<名字>`：在 Chef 的 F9 菜单里把它关掉，并告诉作者。
+- MDL3 的日志（`MDL.log`）里 HUDdle 是 `enable failed ... attempt to call field 'time' (a nil value)`：MDL3 给它的不是 Chef，没有 `time`。这是 MDL3 眼里的失败，实际是 Chef 在运行它。
 
 ## 卸载
 
@@ -80,7 +82,14 @@ MDL3 的列表里这些 mod 仍然会显示"加载失败"或"已启用"，这是
 
 ## 验证到了哪一步
 
-在 Chef 自带的模拟器里，用三个**我写的假 MDL3 启动器**（代替 MDL3 的 boot）测过：启动器在 init 里启动 mod / 在 boot 里启动 mod（并先用普通 require 试一遍 Chef 的 mod）/ 自己已经交接给 Chef，
-三种情况下 Chef 都按预期运行，假 MDL3 的回调每帧照常被调用，游戏自己的 init 没有被重复或跳过；用你的 HUDdle 0.6.11 也试过，能启动。
-**没有测过真实的 MDL3**：我没有它。假启动器只是按 BF5 的 MDL3 版代码和 Chef 的文档推出来的样子，真实的 MDL3 怎么启动 mod，要靠你这一次来回答。
+**真机**（作者的游戏：MDL3 3.0.0-dev.29，Chef 1.4.1，HUDdle 0.6.11，BF5 击杀反馈 MDL3 版 2.0.1，Treasure Radar 0.7.1n）：
+
+- 0.1.0（有日志）：交接成功；HUDdle 正常，一局约 8 分钟没有错误；正常结算回飞船没问题；BF5 反馈被 MDL3 启用；Treasure Radar 被 Chef 跳过（0.2.0 修的就是这个）；任务中按 ESC 回飞船闪退过一次，没有找到原因，之后没有再出现。
+- 0.2.0（作者的试玩报告，没有传日志）：ESC 回飞船没有闪退，BF5 反馈正常。**Treasure Radar 在真机上是否出现，还没有确认。**
+
+**模拟器**：在 Chef 自带的模拟器里，用我写的**假 MDL3 启动器**（代替 MDL3 的 boot）测过：启动器在 `init` 里启动 mod / 在 `boot` 里启动 mod（并先用普通 `require` 试一遍 Chef 的 mod）/
+同前但只留下 `package.loaded`（真实 MDL3 的样子）/ 自己已经交接给 Chef。几种情况下 Chef 都按预期运行，假 MDL3 的回调每帧照常被调用，游戏自己的 `init` 没有被重复或跳过；用真实的 HUDdle 0.6.11 也试过，能启动。
+假启动器只是照真机日志和 BF5 的 MDL3 版代码推出来的样子，不是真的 MDL3。
+
+只在 MDL3 3.0.0-dev.29（"protected preview"）上测过；MDL3 以后怎么启动 mod 如果变了，上面"出问题时"的文件能看出来。
 详细见 [`docs/chef-under-mdl3.md`](../docs/chef-under-mdl3.md)。

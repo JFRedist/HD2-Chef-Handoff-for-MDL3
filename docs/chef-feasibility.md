@@ -1,5 +1,8 @@
 # Chef 版可行性调研
 
+> **已放弃的路线（2026-11-01）。** 看到这里的调研结果后，作者决定改用 BF5 击杀反馈的 MDL3 版，Chef 版没有继续做；探针 0.2.0 只在模拟器里验证过，没有在真实游戏里运行。
+> 下面是放弃时的记录，之后没有再更新；留着是因为其中的方法和数据对别的 Chef mod 仍有参考价值。现在的项目是 Chef Hand-off for MDL3，见 [README](../README.md)。
+
 调研日期 2026-11-01。对象：Nexus 上的 [Battlefield 5 Hit and Kill Feedback v2.0.1（MDL3 版）](https://www.nexusmods.com/helldivers2/mods/16927)，
 目标：做一个能在 [Chef Shared Loader](https://github.com/Th3chef/Chef-Shared-Loader) 1.4.x 下运行的版本。
 

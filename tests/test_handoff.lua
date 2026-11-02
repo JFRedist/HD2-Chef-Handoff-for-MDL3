@@ -36,6 +36,10 @@ local function game(opts)
   env.os = { getenv = function(k) if k == 'APPDATA' then return base end end, date = os.date }
   local real_open = io.open
   env.io = { open = function(path, mode)
+    if opts.guard_on_io then                        -- a loader that puts its own callbacks back when they are gone, and runs
+      if env.render == nil then env.render = G.game_render end           -- that check whenever a mod opens a file
+      if env.shutdown == nil then env.shutdown = G.game_shutdown end
+    end
     local rel = type(path) == 'string' and path:match('^data/(.*)$')
     if rel then                                     -- the game's patch files: a folder of fixtures, or none
       G.data_first = G.data_first or G.t
@@ -67,6 +71,7 @@ local function game(opts)
       G.chef_saw = {}
       for _, k in ipairs({ 'init', 'update', 'render', 'shutdown' }) do G.chef_saw[k] = env[k] ~= nil end
       local before = env.update
+      if opts.core_sees_through then before = G.sneak end         -- (as if it had found the chain anyway: the test hands it over)
       env.ChefSharedLoader = newproxy(true)                       -- (read-only and not a table, like the real one)
       getmetatable(env.ChefSharedLoader).__index = { version = '1.4.1', api = 3 }
       -- like Chef: its own callbacks, and the update that was set before it started kept and called after its own (the addon
@@ -99,9 +104,18 @@ local function game(opts)
       env.init = function() G.game_inits = (G.game_inits or 0) + 1; if G.record then G.order[#G.order + 1] = 'game init' end end
       env.render = function() G.renders = (G.renders or 0) + 1; if G.record then G.order[#G.order + 1] = 'game render' end end
       env.shutdown = function() G.shutdowns = (G.shutdowns or 0) + 1; if G.record then G.order[#G.order + 1] = 'game shutdown' end end
+      G.game_render, G.game_shutdown = env.render, env.shutdown
     end
   end
   if opts.debug then env.debug = opts.debug end
+  if opts.full_env then                              -- what the real game's Lua has besides
+    env.debug = { getinfo = debug.getinfo, gethook = function() return nil end }
+    env.getmetatable, env.getfenv = getmetatable, getfenv
+  end
+  if opts.mt then setmetatable(env, opts.mt) end
+  if opts.sticky then                                -- a key that taking off (rawset to nil) does not clear
+    env.rawset = function(t, k, v) if t == env and k == opts.sticky and v == nil then return t end return rawset(t, k, v) end
+  end
   if opts.on_update then
     env.CowboyBingusModLoader = { on_update = function(id, fn) G.on_update = { id = id, fn = fn } end }
   end
@@ -167,6 +181,72 @@ G.order = {}
 G.env.init()
 check(table.concat(G.order, ',') == 'chef init' and (G.game_inits or 0) == 0, 'init is Chef\'s own; the game\'s init, called long ago, is not called again')
 check((read(G.path('chef_handoff.log')) or ''):find('run behind Chef', 1, true), 'the log says the callbacks run behind Chef\'s own')
+
+print('== a loader that puts its callbacks back whenever a mod opens a file (a guess at what Chef 1.5.1 found in the game)')
+G = game{ name = 'guard_io', guard_on_io = true }
+G.frames(7)
+check(G.module.state == 'chef started', 'the hand-off happens')
+check(G.chef_saw and not (G.chef_saw.init or G.chef_saw.update or G.chef_saw.render or G.chef_saw.shutdown),
+  'Chef still finds none of the callbacks: nothing opens a file between taking them off and require')
+local glog = read(G.path('chef_handoff.log')) or ''
+check(not glog:find('still on the globals', 1, true), 'and nothing was left on the globals')
+G.record, G.order = true, {}
+G.env.update(1 / 60); G.env.render(); G.env.shutdown()
+check(table.concat(G.order, ',') == 'chef update,game update,chef render,game render,chef shutdown,game shutdown',
+  'the order afterwards is the usual one (' .. table.concat(G.order, ',') .. ')')
+
+print('== a callback that taking it off does not clear')
+G = game{ name = 'sticky', sticky = 'render' }
+G.frames(7)
+check(G.chef_saw and G.chef_saw.render and not G.chef_saw.update, 'Chef finds that one (and only that one)')
+check((read(G.path('chef_handoff.log')) or ''):find('still on the globals right after they were taken off: render', 1, true), 'and the log names it')
+
+print('== how many times the update chain runs a frame once Chef has the game')
+G = game{ name = 'count_once' }
+G.frames(7)
+G.frames(11)
+local clog = read(G.path('chef_handoff.log')) or ''
+check(clog:find('ran 600 times in Chef\'s first 600 updates: once a frame', 1, true), 'normally once a frame, and the log says so')
+G = game{ name = 'count_twice', core_sees_through = true }
+G.frames(5)
+G.sneak = G.env.update                               -- the chain as it is just before the hand-off
+G.frames(2)
+local u0 = G.updates
+G.frames(11)
+clog = read(G.path('chef_handoff.log')) or ''
+check(clog:find('ran 1200 times in Chef\'s first 600 updates: TWICE a frame', 1, true), 'if Chef runs the chain as well: twice, and the log says so')
+check(G.updates - u0 == 1320, 'which is what happened (' .. (G.updates - u0) .. ' runs in 660 frames)')
+G = game{ name = 'count_onupdate', update = false, on_update = true }
+for _ = 1, 1200 do G.on_update.fn(1 / 60) end
+check(not (read(G.path('chef_handoff.log')) or ''):find('update chain ran', 1, true), 'hooked through on_update there is no chain to count: no line')
+
+print('== what the log tells about the callbacks and the globals')
+G = game{ name = 'describe', full_env = true }
+G.frames(7)
+local dlog = read(G.path('chef_handoff.log')) or ''
+check(dlog:find('  the game\'s callbacks: init=0x', 1, true) or dlog:find('  the game\'s callbacks: init=', 1, true), 'at load: the four callbacks')
+local before_line = dlog:match('the game\'s callbacks before: ([^\n]+)') or ''
+local after_line = dlog:match('the game\'s callbacks after Chef loaded: ([^\n]+)') or ''
+check(before_line:find('update=[^ ]+ %[handoff/chef_handoff%.lua:%d+%]') and before_line:find('render=[^ ]+ %[tests/test_handoff%.lua:%d+%]'),
+  'before the hand-off: each with where it was defined (update is this addon\'s hook, render the game\'s)')
+check(after_line:find('update=[^ ]+ %[tests/test_handoff%.lua:%d+%]') and not after_line:find('taken off', 1, true),
+  'after Chef loaded: Chef\'s own, none of them the ones taken off')
+check(dlog:find('metatable of _G: none', 1, true) and dlog:find('_G is the global table: no, this addon runs in it: no', 1, true)
+  and dlog:find('require: [^ ]+ %[tests/test_handoff%.lua:%d+%]'), 'the globals\' metatable, which table the addon runs in, and where require comes from')
+G = game{ name = 'describe_mt', full_env = true, mt = { __newindex = function(t, k, v) rawset(t, k, v) end } }
+G.frames(7)
+dlog = read(G.path('chef_handoff.log')) or ''
+check(dlog:find('metatable of _G: __newindex=[^ ]+ %[tests/test_handoff%.lua:%d+%]') and G.module.state == 'chef started',
+  'a guard on the globals (__newindex) is named, and the hand-off still works')
+G = game{ name = 'describe_bare' }
+G.frames(7)
+dlog = read(G.path('chef_handoff.log')) or ''
+check(dlog:find('metatable of _G: unknown (no getmetatable here)', 1, true) and dlog:find('the game\'s callbacks after Chef loaded: init=', 1, true),
+  'without debug, getmetatable or getfenv it says less, and still says it')
+local order_ok = true
+local p1, p2, p3 = dlog:find('callbacks before', 1, true), dlog:find('debug hook after', 1, true), dlog:find('after Chef loaded', 1, true)
+if not (p1 and p2 and p3 and p1 < p2 and p2 < p3) then order_ok = false end
+check(order_ok, 'the lines come in order: before, then after the hand-off')
 
 print('== the core fails to load: the callbacks are put back as they were')
 G = game{ name = 'fails_cb', require_error = true }

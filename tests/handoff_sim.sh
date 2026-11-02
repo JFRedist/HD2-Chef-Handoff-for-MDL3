@@ -66,6 +66,11 @@ if [ -n "$hl" ]; then
   need ' 6\.[0-9] s \| handing off: require' "$hl" 'and that it handed off after the 6 s delay'
   need "the game.s update, render, shutdown now run behind Chef.s own" "$hl" 'and that the other loaders callbacks run behind Chefs own'
   need 'Chef Shared Loader 1\.[0-9]+\.[0-9]+ started' "$hl" 'and that Chef started'
+  need 'the game.s callbacks before: init=[^ ]+ \[boot:[0-9]+\] update=[^ ]+ \[mods/jfredist/chef_handoff:[0-9]+\]' "$hl" 'it names the callbacks before the hand-off (the boots, and its own hook on update)'
+  need 'the game.s callbacks after Chef loaded: init=[^ ]+ \[mods/chef_shared_loader/core_1:[0-9]+\] update=[^ ]+ \[mods/chef_shared_loader/core_1:' "$hl" 'and after it: Chefs own'
+  refuse 'still on the globals|the one taken off' "$hl" 'nothing stayed on the globals, and nothing taken off came back before Chef was done'
+  need 'around the globals: metatable of _G: none; _G is the global table: yes, this addon runs in it: yes; require: [^ ]+ \[C\]' "$hl" 'it describes the globals and require (the simulators: plain)'
+  need 'the game.s update chain ran 600 times in Chef.s first 600 updates: once a frame' "$hl" 'the other loaders update chain then runs once a frame: Chef does not run it as well'
 else echo '  FAIL  chef_handoff.log was not written'; fails=$((fails + 1)); fi
 if [ -n "$hs" ] && grep -q "^ok $VERRE" "$hs"; then echo '  ok    chef_handoff_state.txt says ok'; else echo '  FAIL  chef_handoff_state.txt does not say ok'; fails=$((fails + 1)); fi
 
@@ -111,6 +116,17 @@ need 'stand-in addon: [0-9]{3,} frames' "$F" 'the Chef mod ran for the whole ses
 refuse 'GAME CRASH|would have ended| ERR |blocked:' "$F" 'no crash, no ERR, nothing blocked'
 hl=$(kept "$SCRATCH/keep_f" 'chef_handoff.log')
 if [ -n "$hl" ]; then need 'took [0-9]+ ms of CPU time' "$hl" 'chef_handoff.log: the slow call is written down'; else echo '  FAIL  chef_handoff.log was not written'; fails=$((fails + 1)); fi
+
+echo '== G: the other loader puts its render and shutdown back whenever something opens a file (a guess at the first real run on Chef 1.5.1)'
+run_variant g mod_g.json "$FIX/standin_chef_addon.lua" "$FIX/standin_chef_addon_norequires.lua"
+GV="$SCRATCH/g.txt"
+need "started by MDL3 chef_handoff $VERRE, which handed off to me" "$GV" 'the hand-off comes'
+need 'started mods/jfredist/handoff_standin2 0\.0\.2' "$GV" 'and Chef starts the mods made for it'
+refuse 'running the callbacks the boot script in .* set before it started me' "$GV" 'Chef finds no callbacks to keep (with 0.2.1 it finds 2 here, as in the real run)'
+need '\[stand-in mdl3\] shutdown; updates seen: (3[0-9]{3}|[4-9][0-9]{3}); callbacks put back: 0' "$GV" 'nothing opened a file while they were off: the loader never had to put one back'
+test "$(grep -c '^\[stand-in mdl3\] shutdown' "$GV")" = 1 && echo '  ok    its shutdown ran once (with 0.2.1: twice, from Chef that kept it and from behind Chef)' \
+  || { echo '  FAIL  its shutdown did not run exactly once'; fails=$((fails + 1)); }
+refuse 'GAME CRASH|would have ended| ERR |blocked:' "$GV" 'no crash, no ERR, nothing blocked'
 
 echo '== C: the other loader hands off to Chef itself, in its boot: the addon leaves it alone'
 run_variant c mod_c.json "$FIX/standin_chef_addon.lua" "$FIX/standin_chef_addon_norequires.lua"

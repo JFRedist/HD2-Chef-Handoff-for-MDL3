@@ -6,6 +6,8 @@
 - 仓库说明改为以 **Chef Hand-off for MDL3** 为中心：README 重写（真机状态、安装、出问题时、贡献者、致谢），`handoff/README.md` 和 `docs/chef-under-mdl3.md` 补上三次真机结果，
   Chef 版 BF5 的研究（`probe/`、`docs/chef-feasibility.md`、`docs/probe-run-1.md`）标为已放弃的历史记录，新增本文件。
 - 贡献者里加上 JFRedist（项目发起和方向、全部真机测试）。
+- 加 MIT 许可证（`LICENSE`）。探针里内嵌的敌人分级表是从 BF5 反馈的 MDL3 版提取的，不在授权范围内（README 的"许可"里写明）。
+- `docs/chef-under-mdl3.md` 写清了怎么认出"做给 Chef"的 addon（规则、读法、会漏掉什么）。
 
 ## Chef Hand-off for MDL3
 
@@ -15,7 +17,7 @@
 - 读不了补丁文件时，用内置的两个名字（Treasure Radar、HUDdle）。
 - 交接 addon 自己不会被当作 Chef 的 addon 摘掉。
 - 测试：自写测试 64 项；`tests/handoff_sim.sh` 加了一个像 Treasure Radar 的替身，和一个只留下 `package.loaded` 的变体 E（真实 MDL3 的样子）。
-- 真机（作者的试玩报告，没有传日志）：ESC 回飞船没有闪退，BF5 反馈正常。**Treasure Radar 的真机确认还没有。**
+- 真机（作者的试玩报告，没有传日志）：Treasure Radar 起来了，ESC 回飞船没有闪退，BF5 反馈正常。
 
 ### 0.1.0 — 2026-11-01
 - 第一版：游戏运行 6 秒后，用 Chef 文档里"给其它加载器"写明的办法（便条 `ChefSharedLoaderHandoff` + `require` Chef 的核心）把游戏交给 Chef。

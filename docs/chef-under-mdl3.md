@@ -1,7 +1,7 @@
 # 在 MDL3 下运行 HUDdle：让 Chef 在 MDL3 里启动
 
-**状态**：交接 addon（0.2.0）在真机上可用（MDL3 3.0.0-dev.29，Chef 1.4.1，HUDdle 0.6.11，BF5 击杀反馈 MDL3 版）。
-还没有确认的两件事：Treasure Radar 在 0.2.0 下真机是否出现；任务中 ESC 回飞船闪退过一次（0.1.0），原因没找到，之后没有再出现。见本文末尾的"还没有确认的"。
+**状态**：交接 addon（0.2.0）在真机上可用（MDL3 3.0.0-dev.29，Chef 1.4.1，HUDdle 0.6.11，Treasure Radar 0.7.1n，BF5 击杀反馈 MDL3 版）。
+还没有解释的一件事：任务中 ESC 回飞船闪退过一次（0.1.0），原因没找到，之后没有再出现。见"ESC 回飞船闪退"和"还没有确认的"两节。
 使用说明在 [`handoff/README.md`](../handoff/README.md)，项目概览在 [`README.md`](../README.md)。
 
 ## 问题
@@ -101,9 +101,29 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 
 ### 0.2.0：交接前把 Chef 的 mod 从 MDL3 的"已启动"里摘出来
 
-做法：交接前读 `data/9ba626afa44a3aa3.patch_N`（和 Chef 同样的读法：72 字节头、32 字节类型行、80 字节条目；每个 Lua 资源只读前 16 KB；超过 4096 条目的补丁和超过 4 MB 的 Lua 不读），
-找 `-- HD2-Addon:` 头，并且（行首的 `local chef = ...`，或 `-- HD2-Requires: chef-shared-loader` 头行）的，就是做给 Chef 的。把它们从 `package.loaded`
-（和加载器的 `modules` 表里状态是 loaded / loading 的）里摘掉，再交接。读不了补丁时用内置的两个名字（Treasure Radar、HUDdle）。
+**为什么要认。** Chef 自己不需要认：在 Chef 的世界里，每个带 `HD2-Addon` 头的 Lua 都是它的 mod。但 MDL3 也用同一个头，所以交接 addon 得把"做给 Chef 的"和"做给 MDL3 的"分开，只摘前者。
+
+**怎么认**（`handoff/chef_handoff.lua` 的 `scan_patch` / `scan_chef_addons`）：
+
+1. 直接读游戏的补丁文件 `data/9ba626afa44a3aa3.patch_0`、`_1` ……（Chef 自己也这样读它们）。连续 8 个号码都不存在就停，最多到 400 号，总共最多读 0.5 秒。
+2. 每个补丁：开头 4 字节要是 `0xF0000011`；类型数 ≤ 64、条目数 ≤ 4096（再大的是游戏自己的数据，不是 mod 的补丁，跳过）。
+3. 条目表（72 字节头、32 字节类型行、80 字节条目）里只看 Lua 类型（类型 id `a14e8dfa2cd117e2`）、长度大于 16 字节且小于 4 MB 的资源，每个只读前 16 KB。（BF5 反馈的 Lua 有 6 MB，所以不读。）
+4. 这段源码要以 **`-- HD2-Addon: mods/<作者>/<名字>` 头开头**，才算 addon。
+5. 是 addon 之后，看它是不是做给 Chef 的，只认两个标记（都在前 16 KB 里）：
+   - **行首的 `local chef = ...`**：Chef 把它的工具表作为 Lua 块的参数交给每个 addon，Chef 的 mod 习惯在开头用这一行接住它。MDL3 的 addon 拿到的是 MDL3 的上下文（有 `log`，没有 `time`），不这样写。
+     只认"行首的代码"，注释里提到的（`-- local chef = ...`）不算。
+   - **`-- HD2-Requires: chef-shared-loader` 头行**：明说需要 Chef。
+   交接 addon 自己除外（它的注释里提到 chef）。
+6. 认出的名字：从 `package.loaded` 里摘掉（`require` 留下的占位 userdata 不动，Chef 会照常启动那种）；在加载器自己的 `modules` 表里状态是 `loaded` / `loading` 的，改成 `load failed: made for Chef Shared Loader`。然后再交接，Chef 就把它们当作还没启动的 mod 启动。
+7. 一个补丁文件都读不了时，用内置的两个名字（Treasure Radar、HUDdle）。
+
+日志里能看到结果：`patch files read: N (X addons, Y made for Chef, …)`、`made for Chef: …`、`taken off package.loaded, so that Chef starts them: …`。
+
+**会漏掉什么。** 既没有 `local chef = ...` 这一行（比如写成 `local c = ...`、`local chef, log = ...`、`local chef = select(1, ...)`，或者前面有缩进）、也没有 `HD2-Requires` 头的 Chef mod 认不出来，
+症状和原来的 Treasure Radar 一样：`chef_loader.log` 里 `already started by another loader (started), not started again`。标记在前 16 KB 之后的、Lua 超过 4 MB 的，也认不出来。
+**会多摘什么。** 一个 MDL3 的 addon 如果恰好有一行行首的 `local chef = ...`，会被摘掉，Chef 会再启动它一份，`chef_loader.log` 里会有 `started mods/<作者>/<名字>`。没见过，也想不出谁会这样写。
+
+`tests/test_handoff.lua` 里每条规则都有例子：有 / 没有 `HD2-Requires` 头、`local chef` 在长注释之后、MDL3 的 addon、超过 4 MB 的 Lua、上千条目的补丁、魔数不对的文件、只在注释里提到 chef、交接 addon 自己、读文件抛错、读不了补丁时的内置名单。
 
 ## 第三次真机结果（2026-11-02，0.2.0）
 
@@ -111,7 +131,7 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 
 - **任务中按 ESC 回飞船没有闪退。**
 - **BF5 反馈（MDL3 版）正常。**
-- Treasure Radar 是否出现，没有说；真机待确认（见下）。
+- **Treasure Radar 没问题。**（0.1.0 时被 Chef 跳过的那个。）没有 0.2.0 的 `chef_handoff.log`，所以不知道是补丁扫描认出了它，还是用了内置名单；日志里 `patch files read:` 那一行会告诉。
 
 ## ESC 回飞船闪退：知道什么，不知道什么
 
@@ -131,7 +151,8 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 
 ## 还没有确认的
 
-- **Treasure Radar 在 0.2.0 下真机是否出现。** 模拟器里 0.1.0 复现了真机日志里的 `already started by another loader (started)`，0.2.0 启动了它；真机要看 `chef_loader.log` 里有没有 `started mods/chef/treasure_radar`，和游戏里的雷达。
+- **补丁扫描在真机上读到了什么。** Treasure Radar 起来了，但没有 0.2.0 的 `chef_handoff.log`，不知道是扫描认出的还是内置名单（只有两个名字）。
+  对别的 Chef mod，只有扫描管用：`patch files read:` 那一行会说读了几个补丁、认出几个做给 Chef 的。
 - **ESC 闪退的原因。** 见上。
 - **别的 MDL3 版本。** 只在 MDL3 3.0.0-dev.29（"protected preview"）上测过。MDL3 以后怎么启动 addon、给 addon 什么全局，可能会变；`chef_handoff.log` 开头列出的全局表能看出变化。
 - **别的 Chef mod。** 真机上只有 HUDdle 0.6.11 和 Treasure Radar 0.7.1n。其它 Chef mod 只在模拟器里用替身测过。
@@ -144,8 +165,10 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
   如果哪个 MDL3 的 mod 被再启动了，`chef_loader.log` 里会有 `started mods/<作者>/<名字>`。
 - **Chef 在游戏运行 6 秒才启动，它的世界检测和 GUI 受影响吗？** 真机上没有：识别了任务世界，引擎三角形绘制正常，HUDdle 平均 0.7 毫秒/帧。
 - **BF5 反馈（MDL3）和交接一起用？** 0.1.0 的 `MDL.log`：它被 MDL3 启用并注册了选项；0.2.0 作者报告正常。
+- **Treasure Radar 会运行吗？** 0.1.0 不会：MDL3 "启动"过它，Chef 就当它已经被别的加载器启动而跳过。0.2.0 起来了（作者的试玩报告）。
 
 ## 许可
 
+本仓库自己的代码和文档用 MIT 许可（根目录的 `LICENSE`），例外见根目录 README 的"许可"。
 Chef 的 LICENSE 允许把它的一部分代码拿去让你的 mod 与它配合，只要保留署名；这个 addon 里没有 Chef 的代码，只用了它文档里公开的交接办法。
 HUDdle 的代码不在这个仓库里，也没有被复制（测试里的可选 D 要你自己提供 Lua 文件）。

@@ -20,6 +20,11 @@ HUDdle 在这种启动里会报错，所以 Chef 之后正常启动了它；Trea
 0.2.0 在交接前读游戏的补丁文件（Chef 自己也这样读），找出做给 Chef 的 addon，把它们从 `package.loaded`（以及加载器自己的 `modules` 表，如果有）里摘掉，Chef 就会正常启动它们。
 MDL3 自己仍然是按它的方式看这些 mod 的（它的 `MDL.log` 里 HUDdle 是 `enable failed`，Treasure Radar 是 `enabled`），这不影响 Chef 运行它们。
 
+**怎么认出"做给 Chef"的 addon：** MDL3 的 addon 和 Chef 的 addon 用同一个 `-- HD2-Addon:` 头，所以要再看一样东西。带这个头的 Lua 里，有**行首的 `local chef = ...`**
+（Chef 把它的工具表交给 addon，Chef 的 mod 习惯在开头用这一行接住它），或者有 `-- HD2-Requires: chef-shared-loader` 头行的，就是做给 Chef 的；MDL3 的 addon 没有这两样。
+只看每个 Lua 的前 16 KB，超过 4 MB 的 Lua（比如 BF5 反馈）不读。两样都没有的 Chef mod 认不出来，症状和原来的 Treasure Radar 一样：`chef_loader.log` 里有 `already started by another loader (started)`。
+规则的完整说明和会漏掉什么，见 [`docs/chef-under-mdl3.md`](../docs/chef-under-mdl3.md)。
+
 ## 安装
 
 1. 你已经有：MDL3 和它的 mod（BF5 反馈）、Chef Shared Loader（1.2.0 以上）、HUDdle 等 Chef 的 mod。
@@ -85,7 +90,7 @@ MDL3 自己仍然是按它的方式看这些 mod 的（它的 `MDL.log` 里 HUDd
 **真机**（作者的游戏：MDL3 3.0.0-dev.29，Chef 1.4.1，HUDdle 0.6.11，BF5 击杀反馈 MDL3 版 2.0.1，Treasure Radar 0.7.1n）：
 
 - 0.1.0（有日志）：交接成功；HUDdle 正常，一局约 8 分钟没有错误；正常结算回飞船没问题；BF5 反馈被 MDL3 启用；Treasure Radar 被 Chef 跳过（0.2.0 修的就是这个）；任务中按 ESC 回飞船闪退过一次，没有找到原因，之后没有再出现。
-- 0.2.0（作者的试玩报告，没有传日志）：ESC 回飞船没有闪退，BF5 反馈正常。**Treasure Radar 在真机上是否出现，还没有确认。**
+- 0.2.0（作者的试玩报告，没有传日志）：Treasure Radar 起来了，ESC 回飞船没有闪退，BF5 反馈正常。
 
 **模拟器**：在 Chef 自带的模拟器里，用我写的**假 MDL3 启动器**（代替 MDL3 的 boot）测过：启动器在 `init` 里启动 mod / 在 `boot` 里启动 mod（并先用普通 `require` 试一遍 Chef 的 mod）/
 同前但只留下 `package.loaded`（真实 MDL3 的样子）/ 自己已经交接给 Chef。几种情况下 Chef 都按预期运行，假 MDL3 的回调每帧照常被调用，游戏自己的 `init` 没有被重复或跳过；用真实的 HUDdle 0.6.11 也试过，能启动。
@@ -93,3 +98,7 @@ MDL3 自己仍然是按它的方式看这些 mod 的（它的 `MDL.log` 里 HUDd
 
 只在 MDL3 3.0.0-dev.29（"protected preview"）上测过；MDL3 以后怎么启动 mod 如果变了，上面"出问题时"的文件能看出来。
 详细见 [`docs/chef-under-mdl3.md`](../docs/chef-under-mdl3.md)。
+
+## 许可
+
+MIT，见仓库根目录的 [`LICENSE`](../LICENSE)。

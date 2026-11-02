@@ -21,7 +21,7 @@ Tested by the repository owner in the real game (MDL3 3.0.0-dev.29, Chef 1.4.1).
 | 完成任务、正常结算回飞船 | 正常（0.1.0，一次） | 日志：任务世界 → 加载 → 飞船，退出时 `shutdown (clean)` |
 | BF5 击杀反馈（MDL3 版）一起用 | 正常 | 0.2.0：作者的试玩报告，没有传日志。0.1.0 的 `MDL.log` 里它被 MDL3 启用并注册了选项；Chef 没有把它再启动一份 |
 | 任务中按 ESC 回飞船 | 0.1.0 下闪退过**一次**，原因没找到，之后没有再出现；0.2.0 下没有闪退 | 0.2.0：作者的试玩报告，没有传日志 |
-| Treasure Radar 这类不带 `HD2-Requires` 头的 Chef mod | 0.1.0 被 Chef 跳过（日志里 `already started by another loader (started)`）；0.2.0 改了，**真机还没有确认** | 0.2.0 在真实 Chef 的模拟器里启动了它 |
+| Treasure Radar 这类不带 `HD2-Requires` 头的 Chef mod | 0.1.0 被 Chef 跳过（日志里 `already started by another loader (started)`）；0.2.0 起来了 | 0.2.0：作者的试玩报告，没有传日志；在真实 Chef 的模拟器里也启动了 |
 
 ESC 那次闪退没有找到原因，0.2.0 也没有做任何针对它的改动，所以只能说"没有再出现"，不能说"修好了"。顺带一个事实：闪退那一次还没有装 BF5 反馈（作者当时说还没试 MDL3 的 mod，Chef 的日志里也没有它），之后的几次都装了（详见 [`docs/chef-under-mdl3.md`](docs/chef-under-mdl3.md)）。
 
@@ -32,6 +32,7 @@ ESC 那次闪退没有找到原因，0.2.0 也没有做任何针对它的改动�
 3. 这个 mod 等 6 秒，然后用 Chef 文档里"给其它加载器"写明的办法（设一个便条，再 `require` Chef 的核心）把游戏交给 Chef。之后 MDL3 的 mod 照常运行，Chef 运行它自己的 mod。
 4. 0.2.0 多做一步：MDL3 也会"启动"Chef 的 mod（给它们的不是 Chef，多数会报错）。没报错的（Treasure Radar）会被 Chef 当作"已经被别的加载器启动"而跳过。
    所以交接前，这个 mod 读游戏的补丁文件找出做给 Chef 的 addon，把它们从 `package.loaded` 里摘掉，让 Chef 正常启动它们。
+   怎么认：带 `-- HD2-Addon:` 头的 Lua 里，再有**行首的 `local chef = ...`**（Chef 把工具表交给 addon 的惯用写法），或者 `-- HD2-Requires: chef-shared-loader` 头行，就是做给 Chef 的。规则的细节和会漏掉什么见 [`docs/chef-under-mdl3.md`](docs/chef-under-mdl3.md)。
 
 没装 Chef，或者 Chef 已经在运行时，它什么也不做。原理、验证、风险和已知的疑点见 [`docs/chef-under-mdl3.md`](docs/chef-under-mdl3.md)。
 
@@ -61,7 +62,7 @@ ESC 那次闪退没有找到原因，0.2.0 也没有做任何针对它的改动�
 | `handoff/` | **交接 addon**：`chef_handoff.lua`、`mod.json`、使用说明 |
 | `dist/` | 打好的 mod 管理器 zip（与源码逐字节对应，构建是确定性的）：当前的 `Chef-Hand-off-for-MDL3-0.2.0.zip`，和已停用的探针 `BFV-Chef-Probe-0.2.0.zip` |
 | `docs/chef-under-mdl3.md` | 在 MDL3 下运行 Chef 和 HUDdle：问题、交接办法、三次真机结果、验证、风险 |
-| `CHANGELOG.md` | 版本记录 |
+| `CHANGELOG.md`、`LICENSE` | 版本记录；MIT 许可证 |
 | `probe/`、`docs/chef-feasibility.md`、`docs/probe-run-1.md` | 已放弃的研究：BF5 击杀反馈的 Chef 版（见下） |
 | `tools/` | `hd2patch.py`（资源哈希 MurmurHash64A 和 Lua 补丁文件的读写）、`pack.py`（把 `mod.json` + Lua 打成 Arsenal / HD2 Mod Manager 的 zip）、`inspect_patch.py`（只读地查看/解出补丁文件）、`extract_tiers.py`、`modsim_extend.py`（探针的测试用） |
 | `tests/` | 见下 |
@@ -114,4 +115,12 @@ HUDDLE_LUA=<HUDdle 的 Lua 文件> tests/handoff_sim.sh <Chef 仓库路径>   # 
 
 - **Chef Shared Loader**，Th3chef：交接办法是它的文档公开写明的（*"Everything here is free to copy into your loader as it is"*）；本仓库没有它的代码。
 - **HUDdle**，rosensterner（部分改编自 luka189 的 NarrowHUD）：本仓库没有它的任何文件。
-- **BF5 Hit and Kill Feedback**（原版 [16832](https://www.nexusmods.com/helldivers2/mods/16832) 和 MDL3 版 [16927](https://www.nexusmods.com/helldivers2/mods/16927)）、**MDL3**：它们的作者做了这个仓库围绕的东西；本仓库没有它们的任何文件。
+- **BF5 Hit and Kill Feedback**（原版 [16832](https://www.nexusmods.com/helldivers2/mods/16832) 和 MDL3 版 [16927](https://www.nexusmods.com/helldivers2/mods/16927)）、**MDL3**：它们的作者做了这个仓库围绕的东西；本仓库没有它们的任何文件（唯一的例外见下面的"许可"）。
+
+## 许可
+
+本仓库自己的代码和文档用 [MIT 许可](LICENSE)。不在这个授权里的：
+
+- MDL3、Chef、HUDdle、BF5 反馈各有自己的许可，它们的文件不在这个仓库里；文档里引用的 Chef 文档片段归 Chef 的作者。
+- 已放弃的探针里有一张敌人分级表（`probe/bfv_chef_probe.lua` 里 `@@BEGIN tiers@@` 到 `@@END tiers@@` 之间，以及包含它的 `dist/BFV-Chef-Probe-0.2.0.zip`）。
+  它是用 `tools/extract_tiers.py` 从 BF5 反馈 MDL3 版的 Lua 里提取的数据，权利属于那个 mod 的作者，不在 MIT 的授权范围内；`docs/probe-run-1.md` 里引用的它的 3 项和 `tests/test_probe.lua` 里用到的 1 项也一样。交接 addon 没有用到这张表。

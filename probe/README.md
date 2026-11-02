@@ -2,6 +2,7 @@
 
 > **已停用（2026-11-01）。** 这个探针是为做 BF5 击杀反馈的 Chef 版而写的；作者随后改用 MDL3 版，探针 0.2.0 只在模拟器里验证过，没有在真实游戏里运行。
 > **不需要安装它**（`dist/BFV-Chef-Probe-0.2.0.zip` 留作记录）。现在的项目是 Chef Hand-off for MDL3，见 [README](../README.md)。
+> 探针里内嵌的敌人分级表是从 BF5 反馈的 MDL3 版提取的，权利属于那个 mod 的作者，不在本仓库 MIT 许可的范围内（见 README 的"许可"）。
 
 给 Chef Shared Loader 用的**只读**研究 mod，用来回答一个问题：在 7.2.0 之后的纯 Lua 环境里，游戏自己的 Lua 接口到底能让一个 Chef mod 看到什么？
 有了答案才能决定 BF5 击杀反馈的 Chef 版能做到什么程度。背景见 [`docs/chef-feasibility.md`](../docs/chef-feasibility.md)，

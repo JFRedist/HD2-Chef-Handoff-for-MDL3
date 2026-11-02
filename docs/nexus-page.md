@@ -44,7 +44,7 @@ MDL3 starts every addon that has an [i]HD2-Addon[/i] header, Chef's mods too, bu
 
 [size=4][b]New in 0.2.3: works with Chef Shared Loader 1.5.x[/b][/size]
 When Chef is handed the game it also takes over the game's callbacks (MDL3's own update, render and shutdown) and runs them itself. From Chef 1.5.0 those callbacks sit under Chef's hang watchdog: one call that runs for more than 3 seconds counts as a hang, and the whole chain is switched off, MDL3 with it. The hand-off now takes them off the game's global table while Chef loads and puts them back behind Chef's own, so that Chef does not keep them.
-The earlier attempts (0.2.1, 0.2.2, never uploaded here) took them off the addon's own globals, but MDL3 runs every addon in a sandbox of its own, so Chef still kept MDL3's update and shutdown; my 0.2.2 log showed it. If you use Chef 1.5.x, use 0.2.3. (0.2.3 is checked with Chef 1.5.1 in Chef's own simulator, under a stand-in for MDL3's sandbox built from that log; not yet in the game.)
+The earlier attempts (0.2.1, 0.2.2, never uploaded here) took them off the addon's own globals, but MDL3 runs every addon in a sandbox of its own, so Chef still kept MDL3's update and shutdown; my 0.2.2 log showed it. If you use Chef 1.5.x, use 0.2.3. (Tested in the game with Chef 1.5.1: Chef no longer keeps any of MDL3's callbacks.)
 
 [size=4][b]Requirements[/b][/size]
 [list]
@@ -84,12 +84,12 @@ The earlier attempts (0.2.1, 0.2.2, never uploaded here) took them off the addon
 [*]With 0.1.0 the game closed once when I pressed ESC to return to the ship in the middle of a mission. I could not reproduce it (not with 0.2.0 either) and I do not know the cause. If it happens to you, copy MDL.log before you restart the game and send it with chef_handoff.log and chef_loader.log.
 [*]MDL3's own menu and log show Chef mods such as HUDdle as failed or with an error ("enable failed"). That is MDL3's view (it gives addons its own context, not Chef's); Chef is the one running them, and they work in game.
 [*]Once, MDL3's mod list showed every mod's category as unknown (the names were fine). In that launch MDL3's own file service failed at startup, 6 seconds before the hand-off (MDL.log: attempt to index upvalue 'kernel' (a nil value)), and the next launch with the same setup was fine, so it looks like an intermittent MDL3 issue; I have not tested a launch without this mod.
-[*]0.2.3 is verified in Chef's own simulator only, not yet in the game. If it does not work for you, please send chef_handoff.log, chef_loader.log and MDL.log.
+[*]0.2.3 has had one short test run in the game so far (Chef 1.5.1). If it does not work for you, please send chef_handoff.log, chef_loader.log and MDL.log.
 [*]Tested only with MDL3 3.0.0-dev.29, a preview build. A different MDL3 version may start addons differently.
 [/list]
 
 [size=4][b]Tested with[/b][/size]
-MDL3 3.0.0-dev.29, Chef Shared Loader 1.4.1 (0.1.0, 0.2.0) and 1.5.1 (0.2.1, 0.2.2), HUDdle 0.6.11, Treasure Radar 0.7.1n, BF5 Hit and Kill Feedback (MDL3 build) 2.0.1. 0.2.3: Chef's simulator only, Chef 1.4.1 and 1.5.1.
+MDL3 3.0.0-dev.29, Chef Shared Loader 1.4.1 (0.1.0, 0.2.0) and 1.5.1 (0.2.1, 0.2.2), HUDdle 0.6.11, Treasure Radar 0.7.1n, BF5 Hit and Kill Feedback (MDL3 build) 2.0.1. 0.2.3: Chef 1.5.1 in the game, and Chef 1.4.1 and 1.5.1 in Chef's simulator.
 
 [size=4][b]Good to know[/b][/size]
 [list]
@@ -117,7 +117,7 @@ A Chef mod that has neither marker is not recognised.
 [b]解决什么问题：[/b]游戏只运行优先级最高的补丁里的 boot。Chef Shared Loader 和 MDL3 都想当这个 boot，所以默认只能有一个工作：Chef 在上，HUDdle、Treasure Radar 等 Chef mod 能用，MDL3 和它的 mod（比如 BF5 击杀反馈的 MDL3 版）不能用；MDL3 在上则相反。
 [b]它做什么：[/b]这是一个由 MDL3 启动的小 addon，进游戏约 6 秒后，按 Chef 文档里写明的交接办法把游戏交给真正的 Chef。之后 MDL3 照常运行它的 mod，Chef 运行 Chef 的 mod。不包含也不修改 Chef、HUDdle、MDL3 的任何文件；没装 Chef 或 Chef 已在运行时什么也不做。
 [b]0.2.0 新增：[/b]MDL3 会把 Chef 的 mod 也"启动"一遍（给的不是 Chef）。没报错的（Treasure Radar）会被 Chef 当作已经被别的加载器启动而跳过。现在交接前先读游戏的补丁文件，认出做给 Chef 的 addon，把它们从 package.loaded 里摘掉，Chef 就会正常启动它们。
-[b]0.2.3 新增：[/b]和 Chef 1.5.x 一起用。Chef 1.5.0 起会把交接来的游戏回调（MDL3 自己的 update、render、shutdown）放在它的卡死看门狗下面，一次调用超过 3 秒就判卡死、整条链被关掉，MDL3 也就停了。现在 Chef 加载期间先把这些回调从游戏的全局表上摘下，加载完放回它自己的回调后面。之前的 0.2.1、0.2.2（没在这里上架过）摘的是 addon 自己的全局，可 MDL3 给每个 addon 一个沙箱，所以 Chef 照样收着 MDL3 的 update 和 shutdown；我 0.2.2 的日志显示了这一点。用 Chef 1.5.x 请用 0.2.3（目前只在 Chef 自带的模拟器里，在照那份日志做的 MDL3 沙箱替身下验证过）。
+[b]0.2.3 新增：[/b]和 Chef 1.5.x 一起用。Chef 1.5.0 起会把交接来的游戏回调（MDL3 自己的 update、render、shutdown）放在它的卡死看门狗下面，一次调用超过 3 秒就判卡死、整条链被关掉，MDL3 也就停了。现在 Chef 加载期间先把这些回调从游戏的全局表上摘下，加载完放回它自己的回调后面。之前的 0.2.1、0.2.2（没在这里上架过）摘的是 addon 自己的全局，可 MDL3 给每个 addon 一个沙箱，所以 Chef 照样收着 MDL3 的 update 和 shutdown；我 0.2.2 的日志显示了这一点。用 Chef 1.5.x 请用 0.2.3（真机上用 Chef 1.5.1 试过：Chef 不再收下 MDL3 的回调）。
 [b]需要：[/b]MDL3；Chef Shared Loader 1.2.0 以上（真机测试过 1.4.1 和 1.5.1，1.5.x 请用 0.2.3）；Arsenal 或 HD2 Mod Manager。
 [b]安装：[/b]
 1. 照常安装 MDL3、Chef 和你要用的 mod。
@@ -126,7 +126,7 @@ A Chef mod that has neither marker is not recognised.
 4. Purge，再 Deploy。启动游戏，在标题画面停 10 秒以上，再进一局任务。
 [b]怎么知道成功了：[/b]%APPDATA%\Arrowhead\Helldivers2\chef_handoff.log 里有 Chef Shared Loader 1.x.x started，稍后有 update chain ran 600 times ... once a frame；chef_loader.log 里有 started by MDL3 chef_handoff 0.2.3, which handed off to me，没有 running the callbacks；任务中出现 HUDdle，按 F9 出 Chef 的菜单，MDL3 的 mod 照常。
 [b]出问题时：[/b]MDL3 的 mod 正常、Chef 的 mod 没有：看 chef_handoff.log。Chef 的 mod 正常、MDL3 的 mod 没有（也没有 chef_handoff.log）：Chef 的优先级还是高的，对调后 Purge 再 Deploy。反馈时请附上 chef_handoff.log、chef_loader.log 和 MDL.log（MDL.log 每次启动会被覆盖，闪退后先拷出来再重开游戏）。
-[b]已知问题：[/b]0.1.0 下任务中按 ESC 回飞船闪退过一次，原因没找到，之后没有再出现。只在 MDL3 3.0.0-dev.29（预览版）上测过。Chef 的 mod 在 MDL3 的菜单里会显示错误，实际能正常运行。有一次 MDL3 里所有 mod 的分类都显示“未知”：那次 MDL3 自己读文件的服务在启动时就坏了，比交接早 6 秒，下一次同样的安装就正常了，看起来是 MDL3 自己时有时无的问题。0.2.3 只在模拟器里验证过。
+[b]已知问题：[/b]0.1.0 下任务中按 ESC 回飞船闪退过一次，原因没找到，之后没有再出现。只在 MDL3 3.0.0-dev.29（预览版）上测过。Chef 的 mod 在 MDL3 的菜单里会显示错误，实际能正常运行。有一次 MDL3 里所有 mod 的分类都显示“未知”：那次 MDL3 自己读文件的服务在启动时就坏了，比交接早 6 秒，下一次同样的安装就正常了，看起来是 MDL3 自己时有时无的问题。0.2.3 在真机上只试过一次短的。
 [b]来源：[/b]代码、文档和问题反馈在 GitHub（MIT 许可）。代码是在 Claude（Anthropic 的 AI）的帮助下写的，由我在真实游戏里测试。
 [/spoiler]
 ```
@@ -151,7 +151,7 @@ Mod manager zip (Arsenal / HD2 Mod Manager). Needs MDL3 and Chef Shared Loader 1
 0.2.3（新的这一版；0.2.1、0.2.2 没有上架过）：
 
 ```
-Works with Chef Shared Loader 1.5.x. Chef 1.5 runs the callbacks it is handed under its hang watchdog and would switch MDL3 off after one call over 3 s; MDL3's callbacks are now taken off the game's global table while Chef loads and put back behind Chef's own (MDL3 runs addons in a sandbox, so the addon's own globals were the wrong place). The log says which table was used, what was on it before and after, and whether MDL3's update then runs once a frame. (Checked in Chef's simulator with Chef 1.4.1 and 1.5.1; not yet in the game.)
+Works with Chef Shared Loader 1.5.x. Chef 1.5 runs the callbacks it is handed under its hang watchdog and would switch MDL3 off after one call over 3 s; MDL3's callbacks are now taken off the game's global table while Chef loads and put back behind Chef's own (MDL3 runs addons in a sandbox, so the addon's own globals were the wrong place). The log says which table was used, what was on it before and after, and whether MDL3's update then runs once a frame. (Tested in the game with Chef 1.5.1, and in Chef's simulator with Chef 1.4.1 and 1.5.1.)
 ```
 
 0.2.0（如果已经上架过，这是上一版的说明）：
@@ -162,7 +162,7 @@ First public release. Chef mods that MDL3 starts without Chef (Treasure Radar) a
 
 ## 发布前检查
 
-0. **已经上架过 0.2.0 的话**：把 0.2.3 作为新版本上传（同一个 mod 页面，新文件），并在页面上置顶一条说明：用 Chef 1.5.x 请用 0.2.3。0.2.0 的文件可以留着给 Chef 1.4.x 用户，也可以归档。**最好等你用 0.2.3 在真机上跑过一次再传**（上传前我会把这一页按那次的结果再改一遍）。
+0. **已经上架过 0.2.0 的话**：把 0.2.3 作为新版本上传（同一个 mod 页面，新文件），并在页面上置顶一条说明：用 Chef 1.5.x 请用 0.2.3。0.2.0 的文件可以留着给 Chef 1.4.x 用户，也可以归档。（0.2.3 已经在你的真机上跑过一次，这一页按那次的结果改过了。）
 1. **AI 标签。** Nexus 要求给 AI 生成的内容打标签。我这里打不开 Nexus，只从搜索摘要看到：有一个 *AI-Generated Content* 标签（摘要里写的范围包括代码），和一个 *AI Assisted* 标签（AI 只有有限参与时用）；没打标签可能被处理。这个 mod 的代码是我写的，所以请在上传页选 *AI-Generated Content*，具体选项以页面上的原文为准。描述末尾的那句 Claude 的说明请保留。
 2. **要求（Requirements）栏。** 把 MDL3 的页面加进去；Chef Shared Loader 如果在 Nexus 上也有页面就一起加。我没找到它们的 Nexus 链接，所以描述里 MDL3 没有链接，Chef 的链接指向它的 GitHub Release（它的 README 里写的下载地方）。
    描述里其余的 Nexus 链接：HUDdle（18108）和 BF5 的 MDL3 版（16927）的编号是你给我的；Treasure Radar 的编号 18265 是我从你 Arsenal 里它的文件夹名（`Treasure Radar 18265 0.7.1n …`）取的，我打不开 Nexus，发布前请点一下确认。

@@ -1,7 +1,7 @@
 # 在 MDL3 下运行 HUDdle：让 Chef 在 MDL3 里启动
 
 **状态**：交接 addon 0.2.0 在真机上可用（MDL3 3.0.0-dev.29，Chef 1.4.1，HUDdle 0.6.11，Treasure Radar 0.7.1n，BF5 击杀反馈 MDL3 版）。
-Chef 1.5.x 和 0.2.0 不兼容（Chef 把 MDL3 的回调放在它的卡死看门狗下面）。0.2.1、0.2.2 想修，真机上和 Chef 1.5.1 一起跑过（Chef 的 mod 和 BF5 都正常，没有判谁卡死），但 Chef 两次都收下了 MDL3 的两个回调。0.2.2 的日志说明了原因：**MDL3 给每个 addon 一个沙箱**，0.2.1、0.2.2 摘的只是沙箱里的，MDL3 真正的 `update`、`shutdown` 一直在 Chef 的看门狗下面。0.2.3 改在游戏的全局表上摘（模拟器里，在照真机日志做的 MDL3 沙箱替身下验证过，**真机还没跑**）。见“Chef 1.5.x”“第四次真机结果”“第五次真机结果”三节。
+Chef 1.5.x 和 0.2.0 不兼容（Chef 把 MDL3 的回调放在它的卡死看门狗下面）。0.2.1、0.2.2 想修，真机上和 Chef 1.5.1 一起跑过（Chef 的 mod 和 BF5 都正常，没有判谁卡死），但 Chef 两次都收下了 MDL3 的两个回调。0.2.2 的日志说明了原因：**MDL3 给每个 addon 一个沙箱**，0.2.1、0.2.2 摘的只是沙箱里的，MDL3 真正的 `update`、`shutdown` 一直在 Chef 的看门狗下面。0.2.3 改在游戏的全局表上摘，**真机上确认了**：Chef 1.5.1 不再收下 MDL3 的任何回调，MDL3 的更新在 Chef 后面每帧运行一次。见“Chef 1.5.x”和“第四次”到“第六次真机结果”。
 0.2.1 那次 MDL3 里所有 mod 的分类都显示“未知”：MDL3 自己读文件的服务在启动时就坏了，早于交接；0.2.2 那次又正常了。见“第四次真机结果”和“第五次真机结果”。
 还没有解释的一件事：任务中 ESC 回飞船闪退过一次（0.1.0），原因没找到，之后没有再出现。见“ESC 回飞船闪退”和“还没有确认的”两节。
 使用说明在 [`handoff/README.md`](../handoff/README.md)，项目概览在 [`README.md`](../README.md)。
@@ -255,11 +255,33 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 - 交接后的计数改为：游戏全局表上的 `update`（放在 Chef 后面的那个）每被游戏调用一次算一帧，看本 mod 的钩子（由 MDL3 的更新调用）跑了几次。每帧一次是对的；两次说明 Chef 也在跑 MDL3 的更新。
 - 变体 H 下：Chef 一个回调也没收下，慢调用跑完（`chef_handoff.log` 里 `took 3600 ms of CPU time`），看门狗没有动作，MDL3 60 秒里更新 3600 次，`shutdown` 一次，计数 `once a frame`。全部模拟器检查在 Chef 1.4.1 和 1.5.1 上都通过。
 
-**没有验证的**：0.2.3 还没在真机上跑过。替身和 0.2.2 的日志逐行对得上，但 MDL3 的沙箱可能还有日志没显示出来的地方，比如游戏的全局表是不是也有守卫、MDL3 会不会把自己的 `update` 放回去。下一次真机要看的：
+**当时没有验证的**（真机结果见“第六次真机结果”）：0.2.3 还没在真机上跑过。替身和 0.2.2 的日志逐行对得上，但 MDL3 的沙箱可能还有日志没显示出来的地方，比如游戏的全局表是不是也有守卫、MDL3 会不会把自己的 `update` 放回去。下一次真机要看的：
 `chef_handoff.log` 里 `the game's global table: getfenv(0) ...`、`metatable of the global table`、`the game's callbacks before / after Chef loaded (its global table)` 和最后的计数；`chef_loader.log` 里没有 `running the callbacks`。
 
 **MDL3 里的分类这次正常**：同样的安装、同样启用交接，`MDL.log` 里 `library: startup loader hidden from the list: Chef Shared Loader 1.5.1 (LOADER)`、`scan complete in 2 round(s), 1306 ms`，没有 `kernel` 那种错误（只有每次启动都有的 `E_BUDGET` 和读图标的 `nil`）。
 所以第四次的“分类全是未知”是时有时无的，更像 MDL3 自己的问题。仍然没有做过不启用交接的对照。
+
+## 第六次真机结果（2026-11-02，0.2.3 + Chef 1.5.1）
+
+作者的报告：跑起来似乎正常。传了 `chef_handoff.log`、`chef_loader.log`、`MDL.log`。
+
+`chef_handoff.log`：
+
+- 加载时，本 mod 沙箱里看：`init=nil update=... render=... shutdown=...`（MDL3/boot 的）；游戏的全局表上：`init`、`update`、`render`、`shutdown` 都是 MDL3/boot 的。
+- `the game's global table: getfenv(0) (this addon's _G is a sandbox of its own, not the global table)`：0.2.3 的修法用上了。
+- `metatable of the global table: none`：游戏的全局表没有守卫，所以是直接摘下，没有用替身。
+- 交接前，游戏的全局表上是 MDL3 的四个；没有 `still on` 那一行（都摘下来了）。
+- Chef 加载后，游戏的全局表上四个都是 Chef 的（`core_1.lua:17595 / 17555 / 17619 / 17638`），没有哪个是摘下的又回来了。随后 `update, render, shutdown now run behind Chef's own`。
+- `the game's update chain ran 600 times in the first 600 frames after the hand-off: once a frame`：游戏每帧调用一次放在 Chef 后面的那个 `update`，MDL3 的更新（它调用本 mod 的钩子）也正好每帧一次，不在 Chef 里面。
+
+`chef_loader.log`：`started by MDL3 chef_handoff 0.2.3`，看门狗开着，启动了 Treasure Radar 0.7.1 和 HUDdle 0.6.11，认出任务世界（15936 个单位），引擎三角形正常，退出 `shutdown (clean)`。
+**没有** `running the callbacks ... set before it started me`：Chef 1.5.1 第一次没有收下 MDL3 的任何回调。也没有 `hung`、`switched off`。
+
+`MDL.log`：mod 库扫描正常（1350 毫秒，Chef 1.5.1 被认作启动加载器），分类应当正常；退出时 MDL3 自己的停止顺序照常（它的 shutdown 在 Chef 的之后被调用）。
+有一处和以前不同：`mods/jfredist/chef_handoff: stopped - Off. It has no shutdown of its own`。0.2.2 把它的包装放进了本 mod 沙箱里自己的 `shutdown`，0.2.3 不碰沙箱，所以 MDL3 说本 mod 没有自己的 shutdown。本 mod 也不需要。
+
+**结论**：在真机上，0.2.3 让 MDL3 的回调离开了 Chef 的手：Chef 不再收下它们，MDL3 的更新在 Chef 后面、它的看门狗外面每帧运行一次。
+**没有在真机上验证的**：看门狗真的碰上 MDL3 一次超过 3 秒的调用时会怎样（这台机器上没有这种调用；模拟器的变体 H 里 0.2.3 下没事）；更长的运行（这一次约 1 分 45 秒，任务里约半分钟）。
 
 ## ESC 回飞船闪退：知道什么，不知道什么
 
@@ -279,12 +301,12 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 
 ## 还没有确认的
 
-- **0.2.3 在真机上**：游戏的全局表是不是 `getfenv(0)`、有没有守卫，Chef 还会不会收下回调。见“第五次真机结果”。
+- **看门狗真的碰上 MDL3 的慢调用时**：真机上没有出现过超过 3 秒的调用；0.2.3 下 MDL3 的更新已经不在看门狗下面（第六次真机结果），模拟器里慢调用没事。
 - **MDL3 里分类全是“未知”**：出现过一次，下一次就正常了；没有做过不启用交接的对照。见“第四次”“第五次真机结果”。
 - **ESC 闪退的原因。** 见上。
 - **别的 MDL3 版本。** 只在 MDL3 3.0.0-dev.29（"protected preview"）上测过。MDL3 以后怎么启动 addon、给 addon 什么全局，可能会变；`chef_handoff.log` 开头列出的全局表能看出变化。
 - **别的 Chef mod。** 真机上只有 HUDdle 0.6.11 和 Treasure Radar 0.7.1n。其它 Chef mod 只在模拟器里用替身测过。
-- **更长的运行。** 我手上带交接的真机日志里，最长一次约 12 分钟（一局任务）。
+- **更长的运行。** 我手上带交接的真机日志里，最长一次约 12 分钟（一局任务，0.1.0）；0.2.3 只有一次约 1 分 45 秒的。
 - **真实的 MDL3 为什么会有超过 3 秒的调用**（评论里 1.5.1 判卡死的原因）：没有 0.2.0 + 1.5.x 的日志。0.2.1 那次 Chef 没有判卡死，`chef_handoff.log` 也没有记到超过 0.5 秒的调用。
 
 ## 已经有答案的（原来的疑问）

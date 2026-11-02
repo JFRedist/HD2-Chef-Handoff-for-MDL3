@@ -62,7 +62,9 @@ Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次�
 - 日志写清用的是哪张表（`the game's global table: ...`）、那里的四个回调在交接前后各是什么、那张表有没有元表；交接后 600 帧里 MDL3 的更新跑了几次（每帧一次是对的；两次说明 Chef 也在跑它）。0.2.2 的同一行在真实的 MDL3 下数的是本 mod 沙箱里的包装，说明不了问题。
 
 **模拟器**：照 0.2.2 的真机日志做了一个 MDL3 沙箱的替身（变体 H，外加 F 那样一次 3.6 秒的慢调用）。0.2.2 在它上面逐行写出和真机一样的日志，真实的 Chef 1.5.1 写出同样的 `(2)`，并在那次慢调用上 `stopped by the hang watchdog`、`switched off boot:... it hung`，MDL3 从此不再更新。
-0.2.3 在它上面：Chef 一个回调也没收下，慢调用跑完（日志里 `took 3600 ms of CPU time`），MDL3 每帧都在更新，看门狗没有动作。Chef 1.4.1 和 1.5.1 上全部检查都通过。**0.2.3 还没在真机上跑过。**
+0.2.3 在它上面：Chef 一个回调也没收下，慢调用跑完（日志里 `took 3600 ms of CPU time`），MDL3 每帧都在更新，看门狗没有动作。Chef 1.4.1 和 1.5.1 上全部检查都通过。
+
+**真机（0.2.3 + Chef 1.5.1）：** 作者说跑起来正常。`chef_handoff.log` 里 `the game's global table: getfenv(0) ...`、`metatable of the global table: none`（没有守卫，直接摘下），Chef 加载后游戏全局表上是 Chef 的四个回调，`once a frame`；`chef_loader.log` 里**没有** `running the callbacks ...` 了：Chef 第一次没有收下 MDL3 的任何回调。真机上还没有碰上过超过 3 秒的调用，所以看门狗那一幕只在模拟器里看过。
 
 ## 安装
 
@@ -135,7 +137,7 @@ Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次�
 - 0.2.0（Chef 1.4.1）：作者的试玩报告说 Treasure Radar 起来了，ESC 回飞船没有闪退，BF5 反馈正常（Chef 的日志没传）。`chef_handoff.log` 证实补丁扫描在真机上起作用：读了 91 个补丁文件，认出 Treasure Radar 和 HUDdle 是做给 Chef 的，把 Treasure Radar 从 `package.loaded` 里摘掉，然后 Chef 1.4.1 启动。
 - 0.2.1（Chef 1.5.1，有日志）：HUDdle、Treasure Radar 0.7.1、BF5 反馈都正常；看门狗开着，没有 `hung`、`switched off`；退出 `shutdown (clean)`。Chef 仍然收下了两个回调。那次 MDL3 里分类全是“未知”（见“可能的副作用”）。
 - 0.2.2（Chef 1.5.1，有日志）：同样都正常，Chef 同样收下两个；日志显示了 MDL3 的沙箱（见上面 0.2.3 一节）。MDL3 的 mod 库扫描这次正常。
-- 0.2.3：还没在真机上跑过。
+- 0.2.3（Chef 1.5.1，有日志）：作者说跑起来正常；Chef 没有收下 MDL3 的任何回调，MDL3 的更新每帧一次、在 Chef 后面；HUDdle、Treasure Radar 启动，退出 `shutdown (clean)`；MDL3 的 mod 库扫描正常。这一次约 1 分 45 秒。
 
 **模拟器**：在 Chef 自带的模拟器里，用我写的**假 MDL3 启动器**（代替 MDL3 的 boot）测过：启动器在 `init` 里启动 mod / 在 `boot` 里启动 mod（并先用普通 `require` 试一遍 Chef 的 mod）/
 同前但只留下 `package.loaded` / 更新链里有一次 3.6 秒的慢调用 / mod 打开文件时就把自己的 `render`、`shutdown` 放回去 / **MDL3 的沙箱（照 0.2.2 的真机日志做的）加一次慢调用** / 自己已经交接给 Chef。几种情况下 Chef 都按预期运行，假 MDL3 的回调每帧照常被调用，游戏自己的 `init` 没有被重复或跳过；用真实的 HUDdle 0.6.11 也试过，能启动。

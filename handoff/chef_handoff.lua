@@ -16,9 +16,15 @@
 -- their helpers from the chunk's argument, or ask for Chef in a header line) and takes them off package.loaded (and off
 -- the loader's own list, when it has one), so that Chef starts them properly.
 --
+-- And one more, found with Chef 1.5: the callbacks the game has (init, update, render, shutdown: MDL3's and its mods' chains) are
+-- kept by Chef when it is handed the game, and it runs them itself after its own, as "a boot script's". From 1.5.0 it does that
+-- under its hang watchdog: a call that runs on for over 3 s counts as a hang and the chain is switched off, MDL3 with it. So
+-- Chef is not given them: they are taken off the globals while Chef loads and put back behind Chef's own (Chef's first, then
+-- MDL3's chain, which the game calls as before), and Chef never owns, times or stops them.
+--
 -- The Chef side is the documented one (Chef Shared Loader by Th3chef, docs/MODDING.md, "For other loaders": "Everything
 -- here is free to copy into your loader as it is"). Nothing of Chef's code is in this file.
-local VERSION = '0.2.0'
+local VERSION = '0.2.1'
 local CORE = 'mods/chef_shared_loader/core_1'    -- Chef's core, a Lua resource without an HD2- header: no loader starts it as a mod
 local DELAY = 6.0                                -- seconds of game time (the frames' dt added up) before the hand-off
 local KEY = '__CHEF_HANDOFF_ADDON'
@@ -247,6 +253,85 @@ local function field(obj, key)
   return nil
 end
 
+-- ---------------------------------------------------------------------------------------------------------------------
+-- the game's callbacks: kept away from Chef, put back behind Chef's own
+-- ---------------------------------------------------------------------------------------------------------------------
+local KEYS = { 'init', 'update', 'render', 'shutdown' }
+local SLOW = 0.5                                     -- seconds of CPU time in one call of the chain worth a line in the log
+local cpu = (type(os) == 'table' and type(os.clock) == 'function') and os.clock or function() return 0 end
+
+-- takes the callbacks off the globals: what is returned is what was there
+local function stash_callbacks()
+  local saved = {}
+  for _, k in ipairs(KEYS) do
+    local f = rawget(_G, k)
+    if type(f) == 'function' then
+      saved[k] = f
+      rawset(_G, k, nil)
+    end
+  end
+  return saved
+end
+
+local slow_lines = 0
+local function note_slow(key, took)
+  if slow_lines >= 5 then return end
+  slow_lines = slow_lines + 1
+  log('one call of the game\'s %s chain (MDL3 and its mods) took %d ms of CPU time', key, math.floor(took * 1000 + 0.5))
+end
+
+local function finish(key, t0, ...)
+  local took = cpu() - t0
+  if took > SLOW then note_slow(key, took) end
+  return ...
+end
+
+-- Chef's own callback first, then the chain that was there before, as Chef's runs the callbacks it keeps, but outside Chef's watchdog
+local function behind(chef_fn, old, key)
+  local errors = 0
+  return function(...)
+    local ok, err = pcall(chef_fn, ...)
+    if not ok then
+      errors = errors + 1
+      if errors <= 3 then log('Chef\'s %s raised an error: %s', key, tostring(err)) end
+    end
+    return finish(key, cpu(), old(...))
+  end
+end
+
+-- put the callbacks back: behind Chef's own when Chef started, as they were when it did not. (init: the game called MDL3's
+-- long ago and does not call it again, Chef's own stays.)
+local function restore_callbacks(saved, chef_started)
+  local kept, back = {}, {}
+  for _, k in ipairs(KEYS) do
+    local old = saved[k]
+    if old ~= nil then
+      local now = rawget(_G, k)
+      if chef_started and k == 'init' then
+        -- (nothing to put back)
+      elseif chef_started and type(now) == 'function' then
+        rawset(_G, k, behind(now, old, k))
+        kept[#kept + 1] = k
+      else
+        rawset(_G, k, old)
+        back[#back + 1] = k
+      end
+    end
+  end
+  if #kept > 0 then log('the game\'s %s now run behind Chef\'s own, not under it (Chef was not given them to keep)', table.concat(kept, ', ')) end
+  if #back > 0 then log('put back as they were: %s', table.concat(back, ', ')) end
+end
+
+-- is a debug hook set on this thread? (Chef's hang watchdog and a loader's own budget both use one; the log says which it is)
+local function hook_state()
+  local d = rawget(_G, 'debug')
+  if type(d) ~= 'table' or type(d.gethook) ~= 'function' then return 'unknown (no debug.gethook here)' end
+  local ok, h, m, c = pcall(d.gethook)
+  if not ok then return 'unknown (debug.gethook failed)' end
+  if h == nil then return 'none' end
+  return string.format('%s (mask "%s", count %s)', tostring(h), tostring(m or ''), tostring(c or 0))
+end
+
 local function handoff()
   local running = rawget(_G, 'ChefSharedLoader')
   if running ~= nil then
@@ -277,11 +362,19 @@ local function handoff()
   local okr, errr = pcall(release_chef_addons)
   if not okr then log('could not look for Chef addons already started by MDL3: %s', tostring(errr)) end
   write_file('chef_handoff_state.txt', 'w', 'attempt ' .. VERSION .. '\n')
+  local saved = stash_callbacks()
   rawset(_G, 'ChefSharedLoaderHandoff', { from = 'MDL3 chef_handoff ' .. VERSION, phase = 'init' })
   log('handing off: require(\'%s\') with the note { from = ..., phase = \'init\' } (the game has called init long ago)', CORE)
+  log('debug hook before: %s', hook_state())
   local ok, err = pcall(require, CORE)
   rawset(_G, 'ChefSharedLoaderHandoff', nil)
   local chef = rawget(_G, 'ChefSharedLoader')
+  log('debug hook after: %s', hook_state())
+  local okb, errb = pcall(restore_callbacks, saved, ok and chef ~= nil)
+  if not okb then
+    log('putting the callbacks back failed: %s', tostring(errb))
+    for k, f in pairs(saved) do if rawget(_G, k) == nil then rawset(_G, k, f) end end
+  end
   if ok and chef ~= nil then
     M.state = 'chef started'
     write_file('chef_handoff_state.txt', 'w', 'ok ' .. VERSION .. '\n')
@@ -310,8 +403,8 @@ local function tick(dt)
   end
 end
 
--- hooked the way the BF5 MDL3 build hooks: chain the game's update global. After the hand-off Chef takes the global
--- over and runs this one as "the callbacks the boot script set before it started me", so the chain goes on.
+-- hooked the way the BF5 MDL3 build hooks: chain the game's update global. At the hand-off the chain is taken off the global
+-- while Chef loads and put back behind Chef's own update (see stash_callbacks, restore_callbacks), so the chain goes on.
 local prev = rawget(_G, 'update')
 if type(prev) == 'function' then
   M.state = 'waiting'

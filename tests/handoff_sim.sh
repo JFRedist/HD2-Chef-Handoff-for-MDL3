@@ -6,6 +6,8 @@
 #
 #   tests/handoff_sim.sh <path to a Chef-Shared-Loader checkout> [scratch dir]
 #
+# HANDOFF_LUA=<another copy of the addon> runs that one instead: variant F fails for 0.2.0 on Chef 1.5.x (the hang watchdog stops the
+# other loader's update chain), which is what it is there to catch.
 # Optional: HUDDLE_LUA=/path/to/the/HUDdle/lua/resource also starts the real HUDdle (not part of this repository: take it
 # out of your own copy of the mod with tools/inspect_patch.py).
 # Needs python3 with Pillow (Chef's build uses it) and lua5.1. Nothing in the checkout is changed: it is copied first.
@@ -49,9 +51,9 @@ need '\[stand-in mdl3\] mods/jfredist/chef_handoff -> loaded' "$A" 'it started t
 need "started by MDL3 chef_handoff $VERRE, which handed off to me" "$A" 'Chef says it was handed the game, and by whom'
 need 'boot scripts of mine, not run: .*my start-up stub' "$A" 'Chefs own boot stub is not run (the other loaders boot is the one the game ran)'
 need 'started mods/jfredist/handoff_standin 0\.0\.1' "$A" 'a mod made for Chef starts'
-need '\[mods/jfredist/handoff_standin\] stand-in addon started on Chef Shared Loader 1\.4\.1' "$A" 'and runs on Chefs API'
+need '\[mods/jfredist/handoff_standin\] stand-in addon started on Chef Shared Loader 1\.[0-9]+\.[0-9]+' "$A" 'and runs on Chefs API'
 need 'mods/jfredist/chef_handoff: already started by .* not started again' "$A" 'Chef does not start the hand-off addon a second time'
-need 'running the callbacks the boot script in .* set before it started me \(3\)' "$A" 'the callbacks the other loader set keep running: update, render, shutdown (not init, which the game has called already)'
+refuse 'running the callbacks the boot script in .* set before it started me' "$A" 'Chef is not given the other loaders callbacks to keep (Chef from 1.5.0 would run them under its hang watchdog)'
 need 'stand-in addon: [0-9]{3,} frames' "$A" 'the stand-in addon ran for the whole session'
 need 'drawn: [1-9][0-9]* rects' "$A" 'and drew in the mission'
 need '\[stand-in mdl3\] shutdown; updates seen: (1[7-9][0-9]{2}|[2-9][0-9]{3})' "$A" 'the other loaders update went on being called every frame (about 3600 in 60 s)'
@@ -62,7 +64,8 @@ if [ -n "$hl" ]; then
   need "chef_handoff $VERRE loaded; the game.s update is a function" "$hl" 'chef_handoff.log: the addon says it loaded and found an update to hook'
   need 'CowboyBingusModLoader = table\(' "$hl" 'and lists the loader table it found'
   need ' 6\.[0-9] s \| handing off: require' "$hl" 'and that it handed off after the 6 s delay'
-  need 'Chef Shared Loader 1\.4\.1 started' "$hl" 'and that Chef started'
+  need "the game.s update, render, shutdown now run behind Chef.s own" "$hl" 'and that the other loaders callbacks run behind Chefs own'
+  need 'Chef Shared Loader 1\.[0-9]+\.[0-9]+ started' "$hl" 'and that Chef started'
 else echo '  FAIL  chef_handoff.log was not written'; fails=$((fails + 1)); fi
 if [ -n "$hs" ] && grep -q "^ok $VERRE" "$hs"; then echo '  ok    chef_handoff_state.txt says ok'; else echo '  FAIL  chef_handoff_state.txt does not say ok'; fails=$((fails + 1)); fi
 
@@ -73,7 +76,7 @@ need '\[stand-in mdl3\] mods/jfredist/handoff_standin -> loaded' "$B" 'the plain
 need '\[stand-in mdl3\] boot done; init ran yet\? nil' "$B" 'the hand-off addon was started before the game called init'
 need "started by MDL3 chef_handoff $VERRE, which handed off to me" "$B" 'the hand-off still comes, on the first frames after the delay'
 need 'started mods/jfredist/handoff_standin 0\.0\.1' "$B" 'and Chef starts the mod made for it although the other loader already tried it'
-need 'running the callbacks the boot script in .* set before it started me \(3\)' "$B" 'with the other loader callbacks kept, init not among them'
+refuse 'running the callbacks the boot script in .* set before it started me' "$B" 'the other loaders callbacks are not given to Chef to keep either'
 need 'stand-in addon: [0-9]{3,} frames' "$B" 'it ran'
 need '\[stand-in mdl3\] mods/jfredist/handoff_standin2 -> loaded' "$B" 'the second stand-in (no HD2-Requires line, like Treasure Radar) survives the other loader plain require: it is "started" without Chef'
 need 'started mods/jfredist/handoff_standin2 0\.0\.2' "$B" 'and Chef starts it all the same, because the hand-off addon took it off package.loaded'
@@ -96,6 +99,19 @@ need 'stand-in 2: [0-9]{3,} frames' "$E" 'the second one ran on Chef for the who
 need 'taken off package.loaded, so that Chef starts them: .*handoff_standin2' "$(kept "$SCRATCH/keep_e" 'chef_handoff.log')" 'chef_handoff.log: it says it took them off the list'
 refuse 'GAME CRASH|would have ended| ERR |blocked:' "$E" 'no crash, no ERR, nothing blocked'
 
+echo '== F: the other loader has one slow update call (3.6 s of CPU time, 15 s in): Chef from 1.5.0 would stop a chain it ran itself'
+run_variant f mod_f.json "$FIX/standin_chef_addon.lua" "$FIX/standin_chef_addon_norequires.lua"
+F="$SCRATCH/f.txt"
+need "started by MDL3 chef_handoff $VERRE, which handed off to me" "$F" 'the hand-off comes'
+need 'started mods/jfredist/handoff_standin 0\.0\.1' "$F" 'and Chef starts the mod made for it'
+need '\[stand-in mdl3\] the slow update call ended' "$F" 'the slow call was allowed to finish'
+refuse 'stopped by the hang watchdog|switched off .* for this session|stopped after [0-9]+ errors' "$F" 'the hang watchdog did not stop the other loaders update'
+need '\[stand-in mdl3\] shutdown; updates seen: (3[0-9]{3}|[4-9][0-9]{3})' "$F" 'and its update went on being called every frame afterwards (about 3600 in 60 s)'
+need 'stand-in addon: [0-9]{3,} frames' "$F" 'the Chef mod ran for the whole session'
+refuse 'GAME CRASH|would have ended| ERR |blocked:' "$F" 'no crash, no ERR, nothing blocked'
+hl=$(kept "$SCRATCH/keep_f" 'chef_handoff.log')
+if [ -n "$hl" ]; then need 'took [0-9]+ ms of CPU time' "$hl" 'chef_handoff.log: the slow call is written down'; else echo '  FAIL  chef_handoff.log was not written'; fails=$((fails + 1)); fi
+
 echo '== C: the other loader hands off to Chef itself, in its boot: the addon leaves it alone'
 run_variant c mod_c.json "$FIX/standin_chef_addon.lua" "$FIX/standin_chef_addon_norequires.lua"
 C="$SCRATCH/c.txt"
@@ -111,7 +127,7 @@ if [ -n "${HUDDLE_LUA:-}" ] && [ -f "$HUDDLE_LUA" ]; then
   run_variant d mod_a.json "$HUDDLE_LUA"
   D="$SCRATCH/d.txt"
   need 'started mods/rosensterner/minimal_hud ' "$D" 'HUDdle starts under Chef under the other loader'
-  need 'HUDdle [0-9.]+ on Chef Shared Loader 1\.4\.1' "$D" 'and runs on it'
+  need 'HUDdle [0-9.]+ on Chef Shared Loader 1\.[0-9]+\.[0-9]+' "$D" 'and runs on it'
   refuse 'GAME CRASH|would have ended' "$D" 'no crash'
 else
   echo '== D (optional, HUDDLE_LUA not set): skipped'

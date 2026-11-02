@@ -28,7 +28,7 @@ local function game(opts)
   os.execute('rm -rf "' .. dir .. '" && mkdir -p "' .. dir .. '"')
   local base = dir .. '/A'                 -- APPDATA; the folder names are glued on with backslashes, as on Windows: on this
                                            -- machine the files come out as 'A\Arrowhead\Helldivers2\<name>' inside dir
-  local G = { calls = {}, updates = 0, last_args = nil, required = {}, t = 0 }
+  local G = { calls = {}, updates = 0, last_args = nil, required = {}, t = 0, order = {}, record = false, cpu = 0 }
   local env = {}
   for _, name in ipairs({ 'rawget', 'rawset', 'type', 'pcall', 'tostring', 'tonumber', 'ipairs', 'pairs', 'select', 'error',
                           'string', 'table', 'math' }) do env[name] = _G[name] end
@@ -45,7 +45,7 @@ local function game(opts)
     return real_open(path, mode)
   end }
   if opts.io_error then env.io.open = function() error('boom') end end
-  env.os.clock = os.clock
+  env.os.clock = opts.fake_cpu and function() return G.cpu end or os.clock
   env.package = { loaded = opts.loaded or {} }
   env.stingray = { Application = { can_get = function(kind, name)
     G.calls[#G.calls + 1] = 'can_get ' .. kind .. ' ' .. name
@@ -64,18 +64,44 @@ local function game(opts)
       G.loaded_at_require = {}
       for k, v in pairs(env.package.loaded) do G.loaded_at_require[k] = v end
       env.ChefSharedLoaderHandoff = nil
+      G.chef_saw = {}
+      for _, k in ipairs({ 'init', 'update', 'render', 'shutdown' }) do G.chef_saw[k] = env[k] ~= nil end
       local before = env.update
       env.ChefSharedLoader = newproxy(true)                       -- (read-only and not a table, like the real one)
       getmetatable(env.ChefSharedLoader).__index = { version = '1.4.1', api = 3 }
-      -- like Chef: its own update first, then the callback that was set before it started
-      env.update = function(dt, ...) G.chef_updates = (G.chef_updates or 0) + 1; if before then return before(dt, ...) end end
+      -- like Chef: its own callbacks, and the update that was set before it started kept and called after its own (the addon
+      -- takes the game's callbacks off the globals while Chef loads, so there is none to keep)
+      if not opts.core_no_callbacks then
+        env.update = function(dt, ...)
+          G.chef_updates = (G.chef_updates or 0) + 1
+          if G.record then G.order[#G.order + 1] = 'chef update' end
+          if opts.chef_update_error then error('chef boom') end
+          if before then return before(dt, ...) end
+        end
+        env.init = function() if G.record then G.order[#G.order + 1] = 'chef init' end end
+        env.render = function() if G.record then G.order[#G.order + 1] = 'chef render' end end
+        env.shutdown = function() if G.record then G.order[#G.order + 1] = 'chef shutdown' end end
+      else
+        env.update, env.init, env.render, env.shutdown = nil, nil, nil, nil     -- (a core that installs nothing of its own)
+      end
       return true
     end
     error('module not found: ' .. tostring(name))
   end
   if opts.update ~= false then
-    env.update = function(dt, a, b) G.updates = G.updates + 1; G.last_args = { dt, a, b }; return 'ret' end
+    env.update = function(dt, a, b)
+      G.updates = G.updates + 1; G.last_args = { dt, a, b }
+      if G.record then G.order[#G.order + 1] = 'game update' end
+      if G.burn then G.cpu = G.cpu + G.burn; G.burn = nil end          -- (a call that takes a while, on a fake CPU clock)
+      return 'ret'
+    end
+    if opts.callbacks ~= false then
+      env.init = function() G.game_inits = (G.game_inits or 0) + 1; if G.record then G.order[#G.order + 1] = 'game init' end end
+      env.render = function() G.renders = (G.renders or 0) + 1; if G.record then G.order[#G.order + 1] = 'game render' end end
+      env.shutdown = function() G.shutdowns = (G.shutdowns or 0) + 1; if G.record then G.order[#G.order + 1] = 'game shutdown' end end
+    end
   end
+  if opts.debug then env.debug = opts.debug end
   if opts.on_update then
     env.CowboyBingusModLoader = { on_update = function(id, fn) G.on_update = { id = id, fn = fn } end }
   end
@@ -121,9 +147,79 @@ check(log and log:find('CowboyBingusModLoader = nil', 1, true) and log:find('MDL
 check((read(G.path('chef_handoff_state.txt')) or ''):sub(1, #VER + 3) == 'ok ' .. VER, 'the state file says ok')
 local before = G.updates
 G.frames(2)
-check(G.updates - before == 120 and (G.chef_updates or 0) >= 100, 'after the hand-off the chain goes on: Chef\'s update runs and calls the one set before it (' .. G.updates - before .. ')')
+check(G.updates - before == 120 and (G.chef_updates or 0) >= 100, 'after the hand-off the chain goes on behind Chef\'s update (' .. G.updates - before .. ')')
 check(#G.required == 1, 'no second hand-off')
-check(lines(log) < 20, 'the log stays short (' .. lines(log) .. ' lines)')
+check(lines(log) < 24, 'the log stays short (' .. lines(log) .. ' lines)')
+
+print('== the game\'s callbacks stay out of Chef\'s hands and run behind its own')
+G = game{ name = 'callbacks' }
+G.frames(5)
+local chain = G.env.update
+G.frames(2)
+check(G.chef_saw and not (G.chef_saw.init or G.chef_saw.update or G.chef_saw.render or G.chef_saw.shutdown),
+  'while Chef loads it finds no init, update, render or shutdown to keep: they were taken off the globals')
+check(type(G.env.update) == 'function' and G.env.update ~= chain, 'afterwards update is a new function: Chef\'s own, with the chain behind it')
+G.record, G.order = true, {}
+G.env.update(1 / 60); G.env.render(); G.env.shutdown()
+check(table.concat(G.order, ',') == 'chef update,game update,chef render,game render,chef shutdown,game shutdown',
+  'update, render and shutdown run Chef\'s first, then the game\'s chain (' .. table.concat(G.order, ',') .. ')')
+G.order = {}
+G.env.init()
+check(table.concat(G.order, ',') == 'chef init' and (G.game_inits or 0) == 0, 'init is Chef\'s own; the game\'s init, called long ago, is not called again')
+check((read(G.path('chef_handoff.log')) or ''):find('run behind Chef', 1, true), 'the log says the callbacks run behind Chef\'s own')
+
+print('== the core fails to load: the callbacks are put back as they were')
+G = game{ name = 'fails_cb', require_error = true }
+G.frames(5)
+chain = G.env.update
+local game_render, game_shutdown, game_init = G.env.render, G.env.shutdown, G.env.init
+G.frames(2)
+check(G.module.state == 'hand-off failed', 'the hand-off failed')
+check(G.env.update == chain and G.env.render == game_render and G.env.shutdown == game_shutdown and G.env.init == game_init,
+  'update, render, shutdown and init are the very functions they were before')
+check((read(G.path('chef_handoff.log')) or ''):find('put back as they were', 1, true), 'and the log says so')
+
+print('== Chef started but installed no callbacks of its own')
+G = game{ name = 'nocb', core_no_callbacks = true }
+G.frames(5)
+chain = G.env.update
+G.frames(2)
+check(G.module.state == 'chef started' and G.env.update == chain, 'the game\'s callbacks stay as they were')
+
+print('== Chef\'s own update raising an error does not stop the game\'s chain')
+G = game{ name = 'chef_raises', chef_update_error = true }
+G.frames(7)
+local before_raise = G.updates
+G.frames(2)
+check(G.updates - before_raise == 120, 'the chain runs every frame (' .. G.updates - before_raise .. ')')
+check((read(G.path('chef_handoff.log')) or ''):find('Chef\'s update raised an error', 1, true), 'the log says so')
+
+print('== a slow call of the chain is written to the log (Chef 1.5 would have stopped it)')
+G = game{ name = 'slow', fake_cpu = true }
+G.frames(7)
+G.burn = 1.2
+G.frames(1)
+G.burn = 3.4
+G.frames(1)
+local slowlog = read(G.path('chef_handoff.log')) or ''
+check(slowlog:find('took 1200 ms of CPU time', 1, true) and slowlog:find('took 3400 ms of CPU time', 1, true), 'a call of 1.2 s and one of 3.4 s each get a line')
+local frames_before = G.updates
+G.frames(2)
+check(G.updates - frames_before == 120, 'and the chain goes on')
+
+print('== the debug hook is written to the log, before and after the hand-off')
+G = game{ name = 'hook', debug = { gethook = function() return function() end, '', 1000000 end } }
+G.frames(7)
+local hooklog = read(G.path('chef_handoff.log')) or ''
+check(hooklog:find('debug hook before: function', 1, true) and hooklog:find('debug hook after: function', 1, true) and hooklog:find('count 1000000', 1, true),
+  'a hook that is set is described: before and after')
+G = game{ name = 'nohook', debug = { gethook = function() return nil end } }
+G.frames(7)
+check((read(G.path('chef_handoff.log')) or ''):find('debug hook before: none', 1, true), 'no hook: "none"')
+G = game{ name = 'nodebug' }
+G.frames(7)
+check((read(G.path('chef_handoff.log')) or ''):find('unknown (no debug.gethook here)', 1, true) and #G.required == 1,
+  'no debug library in the addon\'s world: "unknown", and the hand-off still happens')
 
 print('== Chef not installed')
 G = game{ name = 'nochef', chef_installed = false }

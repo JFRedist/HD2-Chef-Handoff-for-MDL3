@@ -1,8 +1,8 @@
 {
   "name": "Chef Hand-off for MDL3",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "guid": "3c0512c0-3e53-40f2-8dd1-767886ab1586",
-  "description": "Lets Chef Shared Loader (and the mods made for it, such as HUDdle and Treasure Radar) run next to MDL3. MDL3 must have the higher priority (it wins the game's boot); this addon, started by MDL3, hands the game to Chef a few seconds after the game starts (the hand-off in Chef's own documentation, 'For other loaders'). Before that it takes the Chef mods that MDL3 has 'started' without Chef off package.loaded, so that Chef starts them properly. Does nothing when Chef is not installed or already running. Writes chef_handoff.log into %APPDATA%\\Arrowhead\\Helldivers2. Needs MDL3 and Chef Shared Loader 1.2.0 or newer, with MDL3 at a higher priority than Chef.",
+  "description": "Lets Chef Shared Loader (and the mods made for it, such as HUDdle and Treasure Radar) run next to MDL3. MDL3 must have the higher priority (it wins the game's boot); this addon, started by MDL3, hands the game to Chef a few seconds after the game starts (the hand-off in Chef's own documentation, 'For other loaders'). Before that it takes the Chef mods that MDL3 has 'started' without Chef off package.loaded, so that Chef starts them properly, and it keeps MDL3's own callbacks out of Chef's hands, so that Chef 1.5's hang watchdog never judges MDL3 (0.2.1). Does nothing when Chef is not installed or already running. Writes chef_handoff.log into %APPDATA%\\Arrowhead\\Helldivers2. Needs MDL3 and Chef Shared Loader 1.2.0 or newer (1.4.1 tested in the game; for 1.5.x use 0.2.1 or later), with MDL3 at a higher priority than Chef.",
   "lua": [
     {
       "resource": "mods/jfredist/chef_handoff",

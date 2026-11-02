@@ -7,6 +7,9 @@
   patch_3  a patch whose Lua entry is bigger than 4 MB (never read)
   patch_4  a Chef addon whose `local chef = ...` is in the first 16 KB but after a long comment
   patch_5  more entries than a mod's patch has (5000): skipped
+  patch_6  addons over 16 KB (0.2.4, NarrowHUD 1.0.6): a Chef addon with `local chef = ...` after 220 KB of data, one whose
+           `local chef = ...` the 16 KB mark cuts in two, and an MDL3 addon whose HD2-Requires line and indented
+           `local chef = ...` come after 16 KB (neither counts there)
 usage: python3 -I make_patches.py <outdir>   (run from the repository root)"""
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'tools'))
@@ -47,4 +50,15 @@ long_comment = long_comment * 1 + (b'-- more comment ' + b'y' * 60 + b'\n') * 10
 write(4, [('mods/test/late_chef', long_comment)])
 many = [('mods/test/filler_%d' % i, b"-- HD2-Addon: mods/test/filler_%d\nlocal chef = ...\n" % i) for i in range(5000)]
 write(5, many)
+# like NarrowHUD 1.0.6: a big data table first, `local chef = ...` at about 220 KB
+deep = (b"-- HD2-Addon: mods/test/deep_chef\nlocal DATA = {\n" + b'  { 1, 2, 3, "some data" },\n' * 8000 + b"}\n"
+        + b"local chef = ...\nreturn {}\n")
+# the first 16 KB read hold 8 bytes of the resource's own header and then the text: put `\nlocal chef` across that mark
+head = b"-- HD2-Addon: mods/test/split_chef\n"
+split = head + b'-- filler\n' * ((16384 - 8 - len(head) - 6) // 10)
+split = split + b'-' * (16384 - 8 - 6 - len(split)) + b"\nlocal chef = ...\nreturn {}\n"
+assert split.index(b"\nlocal chef") + 8 < 16384 < split.index(b"chef = ...") + 8 + 4
+mdl3_big = (b"-- HD2-Addon: mods/test/deep_mdl3\nlocal sr = rawget(_G, 'stingray')\n" + b'-- notes\n' * 3000
+            + b"-- HD2-Requires: chef-shared-loader\nlocal function f(...)\n  local chef = ...\nend\nreturn {}\n")
+write(6, [('mods/test/deep_chef', deep), ('mods/test/split_chef', split), ('mods/test/deep_mdl3', mdl3_big)])
 print('wrote', sorted(os.listdir(out)))

@@ -16,10 +16,10 @@
 -- their helpers from the chunk's argument, or ask for Chef in a header line) and takes them off package.loaded (and off
 -- the loader's own list, when it has one), so that Chef starts them properly.
 --
--- And one more, found with Chef 1.5: the callbacks the game has (init, update, render, shutdown: MDL3's and its mods' chains) are
--- kept by Chef when it is handed the game, and it runs them itself after its own, as "a boot script's". From 1.5.0 it does that
--- under its hang watchdog: a call that runs on for over 3 s counts as a hang and the chain is switched off, MDL3 with it. So
--- Chef is not given them: they are taken off the game's global table while Chef loads and put back behind Chef's own (Chef's
+-- And one more, found with Chef 1.5 (and true of 1.4 as well): the callbacks the game has (init, update, render, shutdown: MDL3's
+-- and its mods' chains) are kept by Chef when it is handed the game, and it runs them itself after its own, as "a boot script's".
+-- From 1.4.0, when the watchdog came, it does that under its hang watchdog: a call that runs on for over 3 s counts as a hang
+-- and the chain is switched off, MDL3 with it. So Chef is not given them: they are taken off the game's global table while Chef loads and put back behind Chef's own (Chef's
 -- first, then MDL3's, which the game calls as before). The game's global table, not this addon's _G: MDL3 runs every addon in a
 -- sandbox of its own (the real run of 0.2.2 showed it), where update and shutdown are the addon's own. 0.2.1 and 0.2.2 took the
 -- callbacks off that sandbox, so Chef 1.5.1 in the game still found MDL3's own update and shutdown, and ran MDL3's update under its
@@ -28,7 +28,7 @@
 --
 -- The Chef side is the documented one (Chef Shared Loader by Th3chef, docs/MODDING.md, "For other loaders": "Everything
 -- here is free to copy into your loader as it is"). Nothing of Chef's code is in this file.
-local VERSION = '0.2.3'
+local VERSION = '0.2.4'
 local CORE = 'mods/chef_shared_loader/core_1'    -- Chef's core, a Lua resource without an HD2- header: no loader starts it as a mod
 local DELAY = 6.0                                -- seconds of game time (the frames' dt added up) before the hand-off
 local KEY = '__CHEF_HANDOFF_ADDON'
@@ -216,10 +216,13 @@ end
 -- ---------------------------------------------------------------------------------------------------------------------
 -- The game's patch files (data/9ba626afa44a3aa3.patch_N): a 72-byte header (0xF0000011, the type count, the entry count),
 -- 32-byte type rows, 80-byte entries (id, type, offset ... u64, then the size as u32 at byte 56). A Lua resource is
--- 8 bytes (length, 2) and then its text. Only the first 16 KB of each Lua resource are read, only in patches of 4096
--- entries or fewer (a mod's own patch is a few; bigger ones are built game data).
+-- 8 bytes (length, 2) and then its text. The first 16 KB of each Lua resource under 4 MB are read, only in patches of 4096
+-- entries or fewer (a mod's own patch is a few; bigger ones are built game data). An addon that does not show in them that
+-- it is made for Chef is read to its end: `local chef = ...` can come late (NarrowHUD 1.0.6 has 220 KB of data before it).
 local LUA_TYPE = '\226\023\209\044\250\141\078\161'           -- a14e8dfa2cd117e2 as 8 bytes, little endian
 local FALLBACK = { 'mods/chef/treasure_radar', 'mods/rosensterner/minimal_hud' }   -- when the patch files cannot be read
+local HEAD = 16384                                             -- bytes of each Lua resource read first
+local LOCAL_CHEF = '\nlocal%s+chef%s*=%s*%.%.%.'               -- `local chef = ...` as code at the start of a line
 
 local function u32(str, i)
   local a, b, c, d = str:byte(i, i + 3)
@@ -252,16 +255,25 @@ local function scan_patch(n, made, stats)
         local off, len = u64(toc, at + 16), u32(toc, at + 56)
         if off and len and len > 16 and len < 4194304 then
           f:seek('set', off)
-          local data = f:read(math.min(len, 16384))
+          local data = f:read(math.min(len, HEAD))
           local src = data and data:sub(9) or ''
           if src:sub(1, 3) == '\239\187\191' then src = src:sub(4) end                  -- a BOM
           local name = src:match('^%-%- HD2%-Addon:%s*([%w_%-/]+)')
           if name then
             stats.addons = stats.addons + 1
-            -- (`local chef = ...` as code at the start of a line, not mentioned in a comment; or the header line asking for Chef)
-            if name ~= 'mods/jfredist/chef_handoff'
-               and (src:find('\nlocal%s+chef%s*=%s*%.%.%.') or src:find('\n%-%- HD2%-Requires:%s*chef%-shared%-loader')) then
-              made[name] = true
+            if name ~= 'mods/jfredist/chef_handoff' then
+              -- (`local chef = ...` as code, not mentioned in a comment; or the header line asking for Chef, which is among the
+              -- first lines, so it is looked for in the first 16 KB only)
+              local chef_mod = src:find(LOCAL_CHEF) or src:find('\n%-%- HD2%-Requires:%s*chef%-shared%-loader')
+              if not chef_mod and #data < len then
+                local rest = f:read(len - #data)
+                if rest then
+                  stats.deep = stats.deep + 1
+                  -- (with the last line of the first 16 KB in front, for a `local chef = ...` that the 16 KB mark cuts in two)
+                  chef_mod = ((src:match('\n[^\n]*$') or '') .. rest):find(LOCAL_CHEF)
+                end
+              end
+              if chef_mod then made[name] = true end
             end
           end
         end
@@ -275,7 +287,7 @@ end
 
 -- every patch file, within a time budget; returns the set of names, and what it saw
 local function scan_chef_addons()
-  local made, stats = {}, { files = 0, addons = 0, errors = 0 }
+  local made, stats = {}, { files = 0, addons = 0, errors = 0, deep = 0 }
   if type(io) ~= 'table' or type(io.open) ~= 'function' then return made, stats, 'no io.open' end
   local t0 = type(os) == 'table' and type(os.clock) == 'function' and os.clock() or 0
   local misses = 0
@@ -308,8 +320,9 @@ local function release_chef_addons()
     note = (note and note .. '; ' or '') .. 'the patch files could not be read: using the built-in list'
   end
   table.sort(names)
-  log('patch files read: %d (%d addons, %d made for Chef, %d read errors)%s%s', stats.files, stats.addons, #names, stats.errors,
-    stats.ms and (' in ' .. stats.ms .. ' ms') or '', note and ('; ' .. note) or '')
+  log('patch files read: %d (%d addons, %d made for Chef, %d read errors)%s%s%s', stats.files, stats.addons, #names, stats.errors,
+    stats.ms and (' in ' .. stats.ms .. ' ms') or '',
+    (stats.deep or 0) > 0 and ('; ' .. stats.deep .. ' addon(s) read past the first 16 KB') or '', note and ('; ' .. note) or '')
   local pk = rawget(_G, 'package')
   local loaded = type(pk) == 'table' and pk.loaded or nil
   if type(loaded) ~= 'table' then log('package.loaded is missing: nothing to take them off') return end

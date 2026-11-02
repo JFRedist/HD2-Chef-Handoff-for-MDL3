@@ -542,7 +542,8 @@ print('== Chef addons that MDL3 has already "started" (Treasure Radar in the fir
 local FIX = OUT .. '/fixtures'
 fresh(FIX)
 assert(os.execute('python3 -I tests/fixtures/handoff/make_patches.py "' .. FIX .. '" > ' .. NULL) == 0, 'make_patches.py failed')
-local ALL = { 'radar_like', 'probe_like', 'mdl3_like', 'late_chef', 'huge_chef', 'filler_0', 'garbage_chef', 'comment_mention' }
+local ALL = { 'radar_like', 'probe_like', 'mdl3_like', 'late_chef', 'huge_chef', 'filler_0', 'garbage_chef', 'comment_mention',
+              'deep_chef', 'split_chef', 'deep_mdl3' }
 local function marked()
   local t = {}
   for _, n in ipairs(ALL) do t['mods/test/' .. n] = true end
@@ -563,9 +564,13 @@ check(at['mods/test/garbage_chef'] == true, 'a file that has a patch\'s layout b
 local rlog = read(G.path('chef_handoff.log')) or ''
 check(at['mods/test/comment_mention'] == true, 'an addon that only mentions chef in comments is not taken for a Chef addon')
 check(at['mods/jfredist/chef_handoff'] == true, 'the hand-off addon itself (whose text talks about chef) is never taken for one')
-check(rlog:find('patch files read: 4 (6 addons, 3 made for Chef, 0 read errors)', 1, true), 'the log says what was read: 4 patch files, 6 addons, 3 of them made for Chef')
-check(rlog:find('made for Chef: mods/test/late_chef mods/test/probe_like mods/test/radar_like', 1, true), 'and which')
-check(rlog:find('taken off package.loaded, so that Chef starts them: mods/test/late_chef mods/test/probe_like mods/test/radar_like', 1, true), 'and which were taken off the list')
+check(at['mods/test/deep_chef'] == nil, 'an addon whose `local chef = ...` comes after 220 KB of data (NarrowHUD 1.0.6) is read to its end and taken off too')
+check(at['mods/test/split_chef'] == nil, 'and one whose `local chef = ...` the 16 KB mark cuts in two')
+check(at['mods/test/deep_mdl3'] == true, 'an MDL3 addon over 16 KB stays: an HD2-Requires line after the first 16 KB, or an indented `local chef = ...`, does not count')
+check(rlog:find('patch files read: 5 (9 addons, 5 made for Chef, 0 read errors)', 1, true), 'the log says what was read: 5 patch files, 9 addons, 5 of them made for Chef')
+check(rlog:find('; 3 addon(s) read past the first 16 KB', 1, true), 'and how many addons were read past the first 16 KB (3: the two deep Chef ones and the MDL3 one)')
+check(rlog:find('made for Chef: mods/test/deep_chef mods/test/late_chef mods/test/probe_like mods/test/radar_like mods/test/split_chef', 1, true), 'and which')
+check(rlog:find('taken off package.loaded, so that Chef starts them: mods/test/deep_chef mods/test/late_chef mods/test/probe_like mods/test/radar_like mods/test/split_chef', 1, true), 'and which were taken off the list')
 
 G = game{ name = 'modules', data = FIX, loaded = marked(),
           modules = { ['mods/test/radar_like'] = 'loaded', ['mods/test/probe_like'] = 'loading', ['mods/test/mdl3_like'] = 'loaded',

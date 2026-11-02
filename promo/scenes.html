@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Chef Hand-off for MDL3: promo video scenes</title>
+<style>
+:root{--bg0:#0a0e14;--bg1:#111b2b;--panel:#152033;--line:#2b3d5a;--text:#e9f0fa;--muted:#8da3bf;
+      --chef:#ffb224;--mdl:#38c8ff;--ok:#3ddc84;--bad:#ff5c63;--warn:#ffd23f}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1920px;height:1080px;overflow:hidden;background:#0a0e14}
+body{font-family:"DejaVu Sans","WenQuanYi Zen Hei",sans-serif;color:var(--text)}
+#stage{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;
+  background:radial-gradient(1100px 650px at 78% 12%,rgba(56,200,255,.13),transparent 62%),
+             radial-gradient(900px 600px at 8% 95%,rgba(255,178,36,.10),transparent 60%),
+             linear-gradient(165deg,var(--bg1),var(--bg0))}
+#grid{position:absolute;inset:0;opacity:.55;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:80px 80px}
+.abs{position:absolute;left:0;top:0}
+.scene{position:absolute;left:0;top:0;width:1920px;height:1080px;visibility:hidden}
+.card{position:absolute;border:4px solid var(--line);border-radius:30px;background:rgba(21,32,51,.94);padding:30px 36px}
+.ct{font-size:40px;font-weight:800;margin-bottom:6px}
+.cs{font-size:28px;color:var(--muted);margin-bottom:22px}
+.chip{display:inline-block;padding:12px 28px;border-radius:999px;border:3px solid;font-size:34px;font-weight:700;margin:0 14px 14px 0;white-space:nowrap}
+.badge{position:absolute;left:36px;right:36px;bottom:26px;padding:12px 18px;border-radius:16px;font-size:30px;font-weight:700;text-align:center}
+.mono{font-family:"DejaVu Sans Mono","WenQuanYi Zen Hei Mono",monospace}
+.row{display:flex;align-items:center;height:96px;border-bottom:2px solid var(--line);font-size:38px}
+.row.hdr{height:64px;font-size:26px;color:var(--muted)}
+.c1{width:520px;font-weight:800}.c2{width:640px}.c3{flex:1}
+.ok2{color:var(--ok);font-weight:700}.bad{color:var(--bad);font-weight:700}.warn{color:var(--warn);font-weight:700}
+.mini{width:300px;padding:18px 16px;border-radius:20px;border:3px solid var(--line);background:rgba(255,255,255,.03);text-align:center}
+.mt{font-size:21px;line-height:1.25;color:var(--muted);height:54px}
+.pill{border:3px solid;border-radius:16px;padding:12px 8px;margin:12px 0;font-size:32px;font-weight:800}
+.pillm{border-color:var(--mdl);color:var(--mdl);background:rgba(56,200,255,.1)}
+.pillc{border-color:var(--chef);color:var(--chef);background:rgba(255,178,36,.1)}
+#sub{position:absolute;left:0;top:905px;width:1920px;height:150px;display:flex;align-items:center;justify-content:center;opacity:0}
+#subtxt{max-width:1640px;padding:14px 40px;border-radius:18px;background:rgba(4,8,14,.78);font-size:46px;line-height:1.38;text-align:center;font-weight:700}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="grid"></div>
+  <div id="bg1" class="abs" style="width:640px;height:640px;border-radius:50%;background:radial-gradient(circle,rgba(56,200,255,.10),transparent 68%)"></div>
+  <div id="bg2" class="abs" style="width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(255,178,36,.09),transparent 68%)"></div>
+
+  <div id="brand" class="abs" style="left:80px;top:42px;font-size:30px;font-weight:700;color:var(--muted);white-space:nowrap">
+    <span style="display:inline-block;width:14px;height:14px;background:var(--warn);margin-right:14px;transform:rotate(45deg)"></span>Chef Hand-off for MDL3</div>
+  <div id="tag" class="abs" style="left:1000px;top:42px;width:840px;text-align:right;font-size:30px;color:var(--muted)"></div>
+
+  <!-- 0: title -->
+  <div id="s0" class="scene">
+    <div id="s0a" class="abs" style="left:0;top:320px;width:1920px;text-align:center;font-size:118px;font-weight:800">Chef Hand-off <span style="color:var(--warn)">for MDL3</span></div>
+    <div id="s0b" class="abs" style="left:0;top:490px;width:1920px;text-align:center;font-size:60px">让 <b style="color:var(--chef)">Chef</b> 和 <b style="color:var(--mdl)">MDL3</b> 在《绝地潜兵 2》里一起工作</div>
+    <div id="s0c" class="abs" style="left:0;top:650px;width:1920px;text-align:center">
+      <span class="chip" style="border-color:var(--chef);color:var(--chef)">HUDdle</span><span class="chip" style="border-color:var(--chef);color:var(--chef)">Treasure Radar</span><span class="chip" style="border-color:var(--mdl);color:var(--mdl)">BF5 击杀反馈</span><span class="chip" style="border-color:var(--ok);color:var(--ok)">同时开</span>
+    </div>
+  </div>
+
+  <!-- 1: the problem -->
+  <div id="s1" class="scene">
+    <div id="s1t" class="abs" style="left:0;top:190px;width:1920px;text-align:center;font-size:50px;font-weight:700">游戏只运行<span style="color:var(--warn)">一个</span> boot 脚本</div>
+    <div id="chefCard" class="card" style="left:120px;top:300px;width:560px;height:470px;border-color:var(--chef)">
+      <div class="ct" style="color:var(--chef);font-size:36px;white-space:nowrap">Chef Shared Loader</div><div class="cs">Chef 的 mod</div>
+      <div class="chip" style="border-color:var(--chef);color:var(--chef)">HUDdle</div><div class="chip" style="border-color:var(--chef);color:var(--chef)">Treasure Radar</div>
+      <div id="chefBadge" class="badge" style="background:rgba(255,92,99,.16);color:var(--bad);opacity:0">✗ Chef 和 HUDdle 不工作</div>
+    </div>
+    <div id="mdlCard" class="card" style="left:1240px;top:300px;width:560px;height:470px;border-color:var(--mdl)">
+      <div class="ct" style="color:var(--mdl);font-size:36px">MDL3</div><div class="cs">MDL3 的 mod</div>
+      <div class="chip" style="border-color:var(--mdl);color:var(--mdl)">BF5 击杀反馈</div><div class="chip" style="border-color:var(--mdl);color:var(--mdl)">其他 MDL3 mod</div>
+      <div id="mdlBadge" class="badge" style="background:rgba(255,92,99,.16);color:var(--bad);opacity:0">✗ MDL3 和它的 mod 不工作</div>
+    </div>
+    <div id="slot" class="abs" style="left:770px;top:380px;width:380px;height:300px;border:5px dashed var(--line);border-radius:34px;background:rgba(255,255,255,.02);text-align:center">
+      <div class="mono" style="font-size:84px;font-weight:800;margin-top:44px">boot</div>
+      <div style="font-size:28px;color:var(--muted)">只有一个位置</div>
+      <div id="slotWho" style="font-size:36px;font-weight:800;margin-top:26px;height:50px"></div>
+    </div>
+    <div id="arrL" class="abs" style="left:690px;top:526px;height:10px;width:80px;border-radius:5px;background:var(--chef);transform-origin:left center"></div>
+    <div id="arrR" class="abs" style="left:1150px;top:526px;height:10px;width:80px;border-radius:5px;background:var(--mdl);transform-origin:right center"></div>
+  </div>
+
+  <!-- 2: the hand-off -->
+  <div id="s2" class="scene">
+    <div id="m2" class="card" style="left:100px;top:190px;width:800px;height:540px;border-color:var(--mdl)">
+      <div class="ct" style="color:var(--mdl)">MDL3</div><div class="cs">游戏运行的是 MDL3 的 boot，它照常启动自己的 mod</div>
+      <div class="chip" style="border-color:var(--mdl);color:var(--mdl)">BF5 击杀反馈</div>
+      <div id="ho" class="chip" style="border-color:var(--ok);color:var(--ok);background:rgba(61,220,132,.14)">Chef Hand-off</div>
+      <div id="tm" class="abs" style="left:36px;top:330px;width:728px;opacity:0">
+        <div id="tmTxt" class="mono" style="font-size:32px;color:var(--muted);margin-bottom:14px">进游戏 0.0 s</div>
+        <div style="height:24px;border-radius:12px;background:rgba(255,255,255,.08);overflow:hidden"><div id="tmBar" style="height:100%;width:0;background:var(--ok);border-radius:12px"></div></div>
+        <div id="tmNote" style="font-size:34px;margin-top:26px;color:var(--ok);font-weight:800;opacity:0">6.0 s：把游戏交给 Chef</div>
+      </div>
+      <div class="abs" style="left:36px;top:250px;width:728px;height:2px;background:rgba(56,200,255,.18)"></div><div id="p1" class="abs" style="left:36px;top:238px;width:26px;height:26px;border-radius:50%;background:var(--mdl);opacity:0;box-shadow:0 0 24px var(--mdl)"></div>
+    </div>
+    <div id="c2" class="card" style="left:1020px;top:190px;width:800px;height:540px;border-color:var(--chef)">
+      <div class="ct" style="color:var(--chef)">Chef Shared Loader</div><div id="c2s" class="cs">还没有运行</div>
+      <div id="c2a" class="chip" style="border-color:var(--chef);color:var(--chef)">HUDdle</div><div id="c2b" class="chip" style="border-color:var(--chef);color:var(--chef)">Treasure Radar</div>
+      <div class="abs" style="left:36px;top:250px;width:728px;height:2px;background:rgba(255,178,36,.18)"></div><div id="p2" class="abs" style="left:36px;top:238px;width:26px;height:26px;border-radius:50%;background:var(--chef);opacity:0;box-shadow:0 0 24px var(--chef)"></div>
+    </div>
+    <div id="hArr" class="abs" style="left:900px;top:402px;width:120px;height:14px;border-radius:7px;background:var(--ok);transform-origin:left center;box-shadow:0 0 22px var(--ok)"></div>
+    <div id="b2" class="abs" style="left:0;top:770px;width:1920px;text-align:center;opacity:0">
+      <span class="chip" style="border-color:var(--line);color:var(--muted);font-size:28px">不包含、不修改 Chef / HUDdle / MDL3</span><span class="chip" style="border-color:var(--line);color:var(--muted);font-size:28px">纯 Lua，没有 DLL</span><span class="chip" style="border-color:var(--line);color:var(--muted);font-size:28px">没装 Chef 就什么也不做</span>
+    </div>
+  </div>
+
+  <!-- 3: the 0.2.0 fix -->
+  <div id="s3" class="scene">
+    <div id="s3t" class="abs" style="left:0;top:122px;width:1920px;text-align:center;font-size:42px;font-weight:700">MDL3 会把带 <span class="mono" style="color:var(--warn)">HD2-Addon</span> 头的 Lua 都“启动”一遍</div>
+    <div id="tbl" class="abs" style="left:120px;top:196px;width:1680px">
+      <div id="h0" class="row hdr"><div class="c1">mod</div><div class="c2">MDL3 “启动”它时</div><div class="c3">Chef 交接之后</div></div>
+      <div id="r1" class="row"><div class="c1" style="color:var(--chef)">HUDdle</div><div class="c2"><span class="bad">加载报错</span></div><div id="r1c" class="c3 ok2">Chef 正常启动 ✓</div></div>
+      <div id="r2" class="row"><div class="c1" style="color:var(--chef)">Treasure Radar</div><div class="c2"><span class="warn">没报错 → 被当成“已启动”</span></div><div id="r2c" class="c3 bad">Chef 跳过它 ✗</div></div>
+      <div id="r3" class="row"><div class="c1" style="color:var(--mdl)">BF5 击杀反馈</div><div class="c2"><span class="ok2">MDL3 自己的 mod</span></div><div class="c3 ok2">仍由 MDL3 运行 ✓</div></div>
+    </div>
+    <div id="scan" class="card" style="left:120px;top:575px;width:1680px;height:300px;border-color:var(--warn)">
+      <div class="abs ct" style="left:36px;top:22px;font-size:38px;color:var(--warn)">0.2.0：交接前先读游戏的补丁文件</div>
+      <div id="code" class="abs mono" style="left:36px;top:100px;width:760px;font-size:28px;line-height:1.7">
+        <div id="cl1">-- HD2-Addon: mods/chef/treasure_radar</div>
+        <div id="cl2" style="color:var(--warn)">local chef = ...</div>
+        <div id="cl3" style="font-size:25px;color:var(--muted);font-family:'WenQuanYi Zen Hei',sans-serif">↑ 行首这一行：Chef 的 mod 才这样写</div>
+      </div>
+      <div class="abs" style="left:850px;top:100px;width:790px">
+        <div id="scTxt" style="font-size:34px;font-weight:700">读了 0 个补丁文件</div>
+        <div style="height:20px;border-radius:10px;background:rgba(255,255,255,.08);overflow:hidden;margin:14px 0 18px"><div id="scBar" style="height:100%;width:0;background:var(--warn);border-radius:10px"></div></div>
+        <div id="scLog" class="mono" style="font-size:23px;line-height:1.5;color:var(--muted);height:70px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4: install -->
+  <div id="s4" class="scene">
+    <div id="k1" class="card" style="left:100px;top:190px;width:480px;height:620px;border-color:var(--ok)">
+      <div class="ct">① 加进 Arsenal</div><div class="cs">并启用</div>
+      <div class="mono" style="font-size:25px;line-height:1.5;color:var(--ok);word-break:break-all;background:rgba(61,220,132,.1);padding:18px;border-radius:14px;margin-top:20px">Chef-Hand-off-for-MDL3-0.2.0.zip</div>
+      <div style="font-size:30px;color:var(--muted);margin-top:30px">Arsenal / HD2 Mod Manager</div>
+      <div style="font-size:30px;color:var(--muted);margin-top:14px">MDL3、Chef 和要用的 mod 照常装好</div>
+    </div>
+    <div id="k2" class="card" style="left:630px;top:190px;width:700px;height:620px;border-color:var(--warn)">
+      <div class="ct" style="color:var(--warn)">② MDL3 的优先级比 Chef 高</div><div class="cs">不是“先加载”，是优先级</div>
+      <div style="display:flex;gap:24px;margin-top:14px">
+        <div id="mi1" class="mini"><div class="mt mono">First mod highest priority</div><div class="pill pillm">MDL3</div><div class="pill pillc">Chef</div><div style="font-size:24px;color:var(--muted)">↑ 越靠上优先级越高</div></div>
+        <div id="mi2" class="mini"><div class="mt mono">Last mod highest priority</div><div class="pill pillc">Chef</div><div class="pill pillm">MDL3</div><div style="font-size:24px;color:var(--muted)">↓ 越靠下优先级越高</div></div>
+      </div>
+      <div id="pnote" class="badge" style="background:rgba(255,92,99,.16);color:var(--bad);opacity:0;bottom:30px">和 Chef、HUDdle 的说明正好相反</div>
+    </div>
+    <div id="k3" class="card" style="left:1380px;top:190px;width:440px;height:620px;border-color:var(--mdl)">
+      <div class="ct" style="font-size:34px;white-space:nowrap">③ Purge → Deploy</div><div class="cs">启动游戏，标题画面等 10 秒</div>
+      <svg width="220" height="220" viewBox="0 0 220 220" style="display:block;margin:20px auto 0"><circle cx="110" cy="110" r="90" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="18"/>
+        <circle id="ring" cx="110" cy="110" r="90" fill="none" stroke="#38c8ff" stroke-width="18" stroke-linecap="round" stroke-dasharray="565.5" stroke-dashoffset="565.5" transform="rotate(-90 110 110)"/>
+        <text id="ringT" x="110" y="128" text-anchor="middle" font-size="58" font-weight="800" fill="#e9f0fa" font-family="DejaVu Sans,WenQuanYi Zen Hei">10 s</text></svg>
+    </div>
+  </div>
+
+  <!-- 5: verify -->
+  <div id="s5" class="scene">
+    <div id="term" class="abs" style="left:140px;top:190px;width:1640px;height:400px;border-radius:24px;background:#0b111b;border:3px solid var(--line);overflow:hidden">
+      <div class="mono" style="height:58px;border-bottom:2px solid var(--line);padding:14px 26px;font-size:25px;color:var(--muted)">%APPDATA%\Arrowhead\Helldivers2\chef_handoff.log（节选）</div>
+      <div id="tl" class="mono" style="padding:26px 28px;font-size:29px;line-height:1.8;white-space:pre;color:#cfe3ff"></div>
+    </div>
+    <div id="chk" class="abs" style="left:0;top:650px;width:1920px;text-align:center">
+      <span id="ck1" class="chip" style="border-color:var(--ok);color:var(--ok);font-size:38px">HUDdle ✓</span><span id="ck2" class="chip" style="border-color:var(--ok);color:var(--ok);font-size:38px">Treasure Radar ✓</span><span id="ck3" class="chip" style="border-color:var(--ok);color:var(--ok);font-size:38px">BF5 击杀反馈 ✓</span>
+    </div>
+  </div>
+
+  <!-- 6: tested / known issues -->
+  <div id="s6" class="scene">
+    <div id="envCard" class="card" style="left:120px;top:190px;width:940px;height:580px;border-color:var(--line)">
+      <div class="ct">实测环境</div><div class="cs">作者在自己的游戏里测的</div>
+      <div id="e1" style="font-size:36px;line-height:2.0"><span class="mono" style="color:var(--mdl)">MDL3</span> 3.0.0-dev.29</div>
+      <div id="e2" style="font-size:36px;line-height:2.0"><span style="color:var(--chef);font-weight:800">Chef Shared Loader</span> 1.4.1</div>
+      <div id="e3" style="font-size:36px;line-height:2.0"><span style="color:var(--chef);font-weight:800">HUDdle</span> 0.6.11 · <span style="color:var(--chef);font-weight:800">Treasure Radar</span> 0.7.1n</div>
+      <div id="e4" style="font-size:36px;line-height:2.0"><span style="color:var(--mdl);font-weight:800">BF5 击杀反馈</span>（MDL3 版）2.0.1</div>
+    </div>
+    <div id="knownCard" class="card" style="left:1110px;top:190px;width:690px;height:580px;border-color:var(--warn);background:rgba(255,210,63,.07)">
+      <div class="ct" style="color:var(--warn)">已知问题</div><div class="cs">先说在前面</div>
+      <div id="kn1" style="font-size:34px;line-height:1.5;margin-bottom:22px">· 只在 MDL3 预览版（3.0.0-dev.29）上测过</div>
+      <div id="kn2" style="font-size:34px;line-height:1.5">· 0.1.0 时任务中按 ESC 回飞船闪退过一次，原因没找到，之后没再出现</div>
+    </div>
+  </div>
+
+  <!-- 7: call to action -->
+  <div id="s7" class="scene">
+    <div id="z1" class="abs" style="left:0;top:250px;width:1920px;text-align:center;font-size:104px;font-weight:800">Chef Hand-off <span style="color:var(--warn)">for MDL3</span></div>
+    <div id="z2" class="abs" style="left:0;top:400px;width:1920px;text-align:center;font-size:52px">0.2.0 · <span style="color:var(--ok);font-weight:800">MIT 开源</span> · 下载和源码见简介</div>
+    <div id="z3" class="abs" style="left:0;top:520px;width:1920px;text-align:center"><span class="chip" style="border-color:var(--warn);color:var(--warn);font-size:40px">Nexus Mods</span><span class="chip" style="border-color:var(--text);color:var(--text);font-size:40px">GitHub</span></div>
+    <div id="z4" class="abs" style="left:0;top:690px;width:1920px;text-align:center;font-size:30px;line-height:1.7;color:var(--muted)">感谢 Chef（Th3chef）· HUDdle（rosensterner）· MDL3 和 BF5 击杀反馈的作者<br>代码由 Claude 协助编写，作者在真实游戏里测试</div>
+  </div>
+
+  <div id="sub"><div id="subtxt"></div></div>
+</div>
+
+<script>
+const FPS = 30, DURATION = 99;
+const SCENES = [[0,6,'s0',''],[6,24,'s1','01 · 问题'],[24,40,'s2','02 · 办法'],[40,56,'s3','03 · 0.2.0 的修复'],
+                [56,74,'s4','04 · 安装'],[74,84,'s5','05 · 怎么确认'],[84,92,'s6','06 · 实测和已知问题'],[92,99,'s7','']];
+// subtitles: [start s, end s, text, optional 'narration']; the same list is written to the .srt. A cue marked 'narration'
+// is for the script and the .srt only (the closing slide already shows its words), it is not drawn on the video.
+const CUES = [
+ [6.6,11.0,'HUDdle 这类 Chef 的 mod，和 MDL3 的 mod，\n是不是只能二选一？'],
+ [11.2,16.8,'游戏只运行一个 boot 脚本。\nChef 在上，MDL3 和 BF5 击杀反馈就不工作'],
+ [17.2,23.6,'MDL3 在上，HUDdle 又起不来'],
+ [24.5,29.8,'Chef Hand-off 是一个由 MDL3 启动的小 addon'],
+ [30.2,35.6,'进游戏 6 秒后，它按 Chef 文档里写明的办法，\n把游戏交给真正的 Chef'],
+ [36.0,39.8,'之后两边各跑各的，互不干扰'],
+ [40.5,45.8,'MDL3 会把 Chef 的 mod 也“启动”一遍，\n只是给它们的不是 Chef'],
+ [46.2,50.8,'没报错的 Treasure Radar，\n会被 Chef 当成已经启动，直接跳过'],
+ [51.2,55.8,'0.2.0 交接前先读补丁文件，认出做给 Chef 的 addon，\n让 Chef 正常启动它们'],
+ [56.5,59.8,'安装：加进 Arsenal 并启用'],
+ [60.2,67.6,'关键：MDL3 的优先级要比 Chef 高\n这和 Chef、HUDdle 的说明正好相反'],
+ [68.0,73.6,'Purge、Deploy，启动游戏，\n在标题画面等 10 秒'],
+ [74.4,79.4,'chef_handoff.log 里出现\nChef Shared Loader 1.4.1 started 就成功了'],
+ [79.8,83.8,'进任务：HUDdle、Treasure Radar 在跑，\nBF5 击杀反馈照常'],
+ [84.4,88.0,'实测环境：MDL3 3.0.0-dev.29，Chef 1.4.1'],
+ [88.2,91.8,'只在 MDL3 预览版上测过。0.1.0 时按 ESC 回飞船\n闪退过一次，原因未明，之后没再出现'],
+ [92.4,98.4,'MIT 开源，下载和源码见简介\nChef Hand-off for MDL3','narration'],
+];
+const LOG = [
+ '6.0 s | patch files read: 91 (4 addons, 2 made for Chef, 0 read errors) in 5 ms',
+ '6.0 s | made for Chef: mods/chef/treasure_radar mods/rosensterner/minimal_hud',
+ '6.0 s | taken off package.loaded, so that Chef starts them: mods/chef/treasure_radar',
+ '6.0 s | Chef Shared Loader 1.4.1 started (api 1). Its own log is chef_loader.log.',
+];
+const SCAN_LOG = 'patch files read: 91 (4 addons, 2 made for Chef, 0 read errors) in 5 ms';
+
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const EASE={lin:x=>x,out:x=>1-Math.pow(1-x,3),inout:x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2,
+            back:x=>{const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2)}};
+const P=(u,a,b,e='inout')=>EASE[e](clamp((u-a)/(b-a)));
+const $=id=>document.getElementById(id);
+function put(el,o={}){
+  const {x=0,y=0,s=1,op=1,g=0}=o;
+  el.style.transform=`translate(${x}px,${y}px) scale(${s})`;
+  el.style.opacity=op;
+  el.style.filter=g>0.001?`grayscale(${g})`:'none';
+  el.style.visibility=op<=0.001?'hidden':'visible';
+}
+const mix=(a,b,k)=>a+(b-a)*k;
+const COL={chef:'255,178,36',mdl:'56,200,255',ok:'61,220,132',bad:'255,92,99',line:'43,61,90'};
+
+function s0(u){
+  put($('s0a'),{y:mix(34,0,P(u,0.2,1.1,'out')),op:P(u,0.2,1.0)});
+  put($('s0b'),{y:mix(24,0,P(u,0.9,1.7,'out')),op:P(u,0.9,1.7)});
+  Array.from($('s0c').children).forEach((c,i)=>{
+    const a=1.8+0.28*i; c.style.transform=`translateY(${mix(26,0,P(u,a,a+0.7,'out'))}px) scale(${mix(.85,1,P(u,a,a+0.7,'back'))})`; c.style.opacity=P(u,a,a+0.5);
+  });
+}
+function win(u){
+  if(u<5) return 0;
+  if(u<6.2) return -P(u,5,6.2);
+  if(u<11) return -1;
+  if(u<12.2) return -1+2*P(u,11,12.2);
+  return 1;
+}
+function s1(u){
+  const w=win(u), cd=clamp(w), md=clamp(-w);
+  put($('s1t'),{op:P(u,0.4,1.2)});
+  put($('chefCard'),{x:mix(-70,0,P(u,0.2,1.3,'out')),op:P(u,0.2,1.2)*(1-.62*cd),g:cd});
+  put($('mdlCard'),{x:mix(70,0,P(u,0.2,1.3,'out')),op:P(u,0.2,1.2)*(1-.62*md),g:md});
+  put($('slot'),{s:mix(.8,1,P(u,1.4,2.4,'back')),op:P(u,1.4,2.2)});
+  const slot=$('slot'), a=Math.abs(w);
+  const rgb=w<0?COL.chef:w>0?COL.mdl:COL.line;
+  slot.style.borderColor=a>0.05?`rgba(${rgb},${.35+.65*a})`:'#2b3d5a';
+  slot.style.borderStyle=a>0.3?'solid':'dashed';
+  slot.style.boxShadow=a>0.05?`0 0 ${70*a}px rgba(${rgb},${.45*a})`:'none';
+  const who=$('slotWho'); who.textContent=w<-0.5?'Chef 优先级最高':w>0.5?'MDL3 优先级最高':''; who.style.color=w<0?'#ffb224':'#38c8ff';
+  put($('arrL'),{op:w<0?clamp(-w*2):0}); $('arrL').style.transform=`scaleX(${w<0?-w:0})`;
+  put($('arrR'),{op:w>0?clamp(w*2):0}); $('arrR').style.transform=`scaleX(${w>0?w:0})`;
+  $('chefBadge').style.opacity=clamp((w-0.5)*2); $('mdlBadge').style.opacity=clamp((-w-0.5)*2);
+}
+function s2(u){
+  const lit=P(u,11.0,12.2);
+  put($('m2'),{x:mix(-70,0,P(u,0.2,1.3,'out')),op:P(u,0.2,1.2)});
+  put($('c2'),{x:mix(70,0,P(u,0.2,1.3,'out')),op:P(u,0.2,1.2)*mix(.5,1,lit),g:mix(.85,0,lit)});
+  const ho=$('ho'); ho.style.transform=`scale(${mix(.5,1,P(u,1.6,2.5,'back'))})`; ho.style.opacity=P(u,1.6,2.1);
+  put($('tm'),{op:P(u,3.2,4.0)});
+  const p=clamp((u-4)/6); $('tmBar').style.width=(p*100)+'%'; $('tmTxt').textContent='进游戏 '+(p*6).toFixed(1)+' s';
+  $('tmNote').style.opacity=P(u,10,10.8);
+  const ar=P(u,10,11.2,'out'); $('hArr').style.transform=`scaleX(${ar})`; $('hArr').style.opacity=ar>0.01?1:0;
+  $('c2s').textContent=u<11.4?'还没有运行':'Chef Shared Loader 1.4.1 started'; $('c2s').style.color=u<11.4?'#8da3bf':'#3ddc84'; $('c2s').style.fontWeight=u<11.4?'400':'700';
+  ['c2a','c2b'].forEach((id,i)=>{ const e=$(id); const a=12.0+0.35*i; e.style.opacity=u<11.4?0:P(u,a,a+0.6); e.style.transform=`scale(${mix(.7,1,P(u,a,a+0.6,'back'))})`; });
+  put($('b2'),{op:P(u,12.8,13.8),y:mix(20,0,P(u,12.8,13.8,'out'))});
+  const run=u>13.6, ph=((u-13.6)*0.5)%1;
+  put($('p1'),{x:ph*700,op:run?1:0}); put($('p2'),{x:((ph+.5)%1)*700,op:run?1:0});
+}
+function s3(u){
+  put($('s3t'),{op:P(u,0.2,1.0)});
+  put($('h0'),{op:P(u,0.6,1.4)});
+  [['r1',1.2],['r2',1.8],['r3',2.4]].forEach(([id,a])=>put($(id),{y:mix(26,0,P(u,a,a+0.8,'out')),op:P(u,a,a+0.8)}));
+  // column 3 appears later; Treasure Radar flips when 0.2.0 does its work
+  const flip=P(u,12.0,12.8);
+  $('r1c').style.opacity=P(u,3.6,4.2);
+  const r2c=$('r2c'); r2c.style.opacity=P(u,4.4,5.0);
+  r2c.textContent=flip>0.5?'摘出后 Chef 启动它 ✓':'Chef 跳过它 ✗'; r2c.style.color=flip>0.5?'#3ddc84':'#ff5c63';
+  const glow=u>5&&u<6.6?Math.sin((u-5)/1.6*Math.PI):0, glow2=u>12&&u<13.4?Math.sin((u-12)/1.4*Math.PI):0;
+  $('r2').style.background=glow>0?`rgba(255,92,99,${.16*glow})`:glow2>0?`rgba(61,220,132,${.16*glow2})`:'transparent';
+  put($('scan'),{y:mix(40,0,P(u,6.6,7.6,'out')),op:P(u,6.6,7.6)});
+  $('cl1').style.opacity=P(u,7.2,7.7); $('cl2').style.opacity=P(u,7.7,8.2); $('cl3').style.opacity=P(u,8.2,8.7);
+  const sp=P(u,8.4,10.6,'lin'); $('scBar').style.width=(sp*100)+'%'; $('scTxt').textContent='读了 '+Math.round(91*sp)+' 个补丁文件';
+  const n=Math.floor(clamp((u-10.6)/1.2)*SCAN_LOG.length); $('scLog').textContent=u>=10.6?SCAN_LOG.slice(0,n):'';
+  $('scLog').style.color=u>13.6?'#3ddc84':'#8da3bf';
+}
+function s4(u){
+  const lit2=P(u,3.8,4.6), lit3=P(u,11.8,12.6);
+  put($('k1'),{y:mix(60,0,P(u,0.3,1.3,'out')),op:P(u,0.3,1.2)});
+  put($('k2'),{y:mix(60,0,P(u,0.6,1.6,'out')),op:P(u,0.6,1.5)*mix(.38,1,lit2),g:mix(.7,0,lit2)});
+  put($('mi1'),{y:mix(24,0,P(u,5.2,6.0,'out')),op:P(u,5.2,6.0)}); put($('mi2'),{y:mix(24,0,P(u,5.8,6.6,'out')),op:P(u,5.8,6.6)});
+  $('pnote').style.opacity=P(u,9,9.8);
+  put($('k3'),{y:mix(60,0,P(u,0.9,1.9,'out')),op:P(u,0.9,1.8)*mix(.38,1,lit3),g:mix(.7,0,lit3)});
+  const r=P(u,13.4,17.4,'lin'); $('ring').setAttribute('stroke-dashoffset',String(565.5*(1-r)));
+  $('ringT').textContent=r>=1?'✓':'10 s'; $('ringT').setAttribute('fill',r>=1?'#3ddc84':'#e9f0fa');
+  // the card whose step is being spoken gets the glow
+  const cur=u<4?'k1':u<12?'k2':'k3';
+  ['k1','k2','k3'].forEach(id=>{ const e=$(id); e.style.boxShadow=id===cur?'0 0 60px rgba(255,255,255,.12)':'none'; });
+}
+function s5(u){
+  put($('term'),{y:mix(40,0,P(u,0.05,0.8,'out')),op:P(u,0.05,0.7)});
+  let budget=Math.max(0,Math.floor((u-0.8)*70)), out=[];
+  for(const l of LOG){ if(budget<=0) break; out.push(l.slice(0,budget)); budget-=l.length+1; }
+  $('tl').textContent=out.join('\n')+(out.length&&Math.floor(u*2)%2===0?' ▌':'');
+  ['ck1','ck2','ck3'].forEach((id,i)=>{ const a=6.4+0.35*i, e=$(id); e.style.opacity=P(u,a,a+0.5); e.style.transform=`translateY(${mix(24,0,P(u,a,a+0.6,'out'))}px) scale(${mix(.8,1,P(u,a,a+0.6,'back'))})`; });
+}
+function s6(u){
+  put($('envCard'),{y:mix(40,0,P(u,0.3,1.2,'out')),op:P(u,0.3,1.1)});
+  ['e1','e2','e3','e4'].forEach((id,i)=>{ const a=1.0+0.3*i; $(id).style.opacity=P(u,a,a+0.5); });
+  put($('knownCard'),{y:mix(40,0,P(u,2.6,3.5,'out')),op:P(u,2.6,3.4)});
+  $('kn1').style.opacity=P(u,3.4,4.0); $('kn2').style.opacity=P(u,4.4,5.0);
+}
+function s7(u){
+  put($('z1'),{y:mix(30,0,P(u,0.3,1.2,'out')),op:P(u,0.3,1.1)});
+  put($('z2'),{y:mix(24,0,P(u,1.0,1.8,'out')),op:P(u,1.0,1.8)});
+  put($('z3'),{y:mix(24,0,P(u,1.6,2.4,'out')),op:P(u,1.6,2.4)});
+  put($('z4'),{op:P(u,2.4,3.2)});
+}
+const FN={s0,s1,s2,s3,s4,s5,s6,s7};
+function setT(t){
+  $('bg1').style.transform=`translate(${1180+90*Math.sin(t*.35)}px,${-60+40*Math.cos(t*.27)}px)`;
+  $('bg2').style.transform=`translate(${-180+70*Math.cos(t*.3)}px,${520+50*Math.sin(t*.33)}px)`;
+  let tag='';
+  for(const [a,b,id,name] of SCENES){
+    const el=$(id), o=Math.min(clamp((t-a)/0.35),clamp((b-t)/0.35));
+    el.style.opacity=o; el.style.visibility=o>0.001?'visible':'hidden';
+    if(t>=a-0.01&&t<b+0.01) { FN[id](t-a); if(t>=a&&t<b) tag=name; }
+  }
+  $('tag').textContent=tag;
+  let cue=null; for(const c of CUES){ if(t>=c[0]&&t<c[1]&&c[3]!=='narration'){cue=c;break;} }
+  if(cue){ $('subtxt').innerHTML=cue[2].replace(/\n/g,'<br>'); $('sub').style.opacity=Math.min(clamp((t-cue[0])/0.25),clamp((cue[1]-t)/0.25)); }
+  else $('sub').style.opacity=0;
+}
+window.setT=setT; window.CUES=CUES; window.DURATION=DURATION; window.FPS=FPS; window.READY=true;
+setT(0);
+</script>
+</body>
+</html>

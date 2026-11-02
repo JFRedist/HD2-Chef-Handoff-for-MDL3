@@ -8,7 +8,7 @@
 This addon is started by MDL3 and, 6 seconds into the game, hands the game over to the real Chef with the hand-off that Chef's own documentation describes for other loaders.
 MDL3 keeps running its mods; Chef runs the Chef mods. No code of Chef, HUDdle or MDL3 is included.
 Download `Chef-Hand-off-for-MDL3-0.2.3.zip` from the Releases page (the same file is in [`dist/`](dist/Chef-Hand-off-for-MDL3-0.2.3.zip)), add it to your mod manager, enable it, and give **MDL3 a higher priority than Chef**, and put this mod between them.
-**For Chef Shared Loader 1.5.x use 0.2.3**: Chef runs the callbacks it is handed (MDL3's update and shutdown) under its hang watchdog, which stops them when one call takes over 3 s.
+**Use 0.2.3, with Chef 1.4.x as with 1.5.x**: Chef runs the callbacks it is handed (MDL3's update and shutdown) under its hang watchdog (there since Chef 1.4.0), which stops them when one call takes over 3 s.
 0.2.1 and 0.2.2 were meant to keep them out of Chef's hands, but MDL3 runs every addon in a sandbox of its own, and they only took the callbacks off that sandbox (the 0.2.2 log showed it); 0.2.3 takes them off the game's own global table.
 Tested by the repository owner in the real game (MDL3 3.0.0-dev.29; Chef 1.4.1 with 0.1.0 and 0.2.0, Chef 1.5.1 with 0.2.1, 0.2.2 and 0.2.3: HUDdle, Treasure Radar and the BF5 feedback all ran). With 0.2.3 Chef 1.5.1 kept none of MDL3's callbacks, and MDL3's update ran once a frame behind Chef's, outside its watchdog. The documentation is in Chinese; the Lua source is commented in English.
 
@@ -25,7 +25,7 @@ Tested by the repository owner in the real game (MDL3 3.0.0-dev.29; Chef 1.4.1 w
 | 任务中按 ESC 回飞船 | 0.1.0 下闪退过**一次**，原因没找到，之后没有再出现；0.2.0 下没有闪退 | 0.2.0：作者的试玩报告，没有传日志 |
 | Treasure Radar 这类不带 `HD2-Requires` 头的 Chef mod | 0.1.0 被 Chef 跳过（日志里 `already started by another loader (started)`）；0.2.0 起来了 | 0.2.0：作者的试玩报告（游戏里没问题）；`chef_handoff.log` 里 `taken off package.loaded, so that Chef starts them: mods/chef/treasure_radar` |
 | 认出做给 Chef 的 addon（读补丁文件） | 在真机上起作用，不是靠内置名单 | 0.2.0 的 `chef_handoff.log`：`patch files read: 91 (4 addons, 2 made for Chef, 0 read errors) in 5 ms`，认出的是 Treasure Radar 和 HUDdle |
-| Chef 1.5.0 / 1.5.1 | 0.2.0 和它们不兼容：Chef 把 MDL3 的回调放在它的卡死看门狗下面，一次调用超过 3 秒就判卡死并终止（评论里有人这样报告，作者转述）。0.2.1、0.2.2 想修，在真实的 MDL3 下没修到（见下两行）；**0.2.3 修好了，真机确认**（见下面 0.2.3 那一行） | 在 Chef 自带的模拟器里，用真实的 1.5.1：0.2.0 下对方的更新链被 `stopped by the hang watchdog: it ran over 3 s` 终止，0.2.1 下不会；1.4.1 上两版都正常。原因、复现和限制见 [`docs/chef-under-mdl3.md`](docs/chef-under-mdl3.md) |
+| Chef 的卡死看门狗（1.4.1 和 1.5.x） | 0.2.0 下 Chef 把 MDL3 的回调放在它的卡死看门狗下面，一次调用超过 3 秒就判卡死并终止（评论里有人这样报告，作者转述；1.5.1 和 1.4.1 都有人遇到）。0.2.1、0.2.2 想修，在真实的 MDL3 下没修到（见下两行）；**0.2.3 修好了，真机确认**（见下面 0.2.3 那一行） | 在 Chef 自带的模拟器里，用真实的 1.5.1 和 1.4.1：0.2.0 下对方的更新链都被 `stopped by the hang watchdog: it ran over 3 s` 终止。（这里原来写着“1.4.1 上两版都正常”，是错的：看门狗是 Chef 1.4.0 加的，1.4.1 就已经这样，2026-11-02 补测。）0.2.3 在两个版本上都不会。原因、复现和限制见 [`docs/chef-under-mdl3.md`](docs/chef-under-mdl3.md) |
 | 0.2.1 + Chef 1.5.1 | HUDdle、Treasure Radar（0.7.1）、BF5 反馈都正常；Chef 的看门狗开着，没有判谁卡死，退出时 `shutdown (clean)`。**但 Chef 仍然收下了 MDL3 的两个回调**（`running the callbacks the boot script in ...patch_89 set before it started me (2)`），这正是 0.2.1 要避免的 | 0.2.1 的 `chef_handoff.log`、`chef_loader.log`、`MDL.log`、`MDL3.log` |
 | 0.2.2 + Chef 1.5.1 | 同样都正常，Chef 同样收下两个。0.2.2 多记的日志说清了原因：**MDL3 给每个 addon 一个沙箱**（addon 的 `_G` 不是全局表，有 MDL3 的 `__index` / `__newindex`），addon 的 `update`、`shutdown` 是它自己的；0.2.1、0.2.2 摘的只是沙箱里的，`render` 摘掉了，MDL3 真正的 `update`、`shutdown` 还在游戏的全局表上，Chef 从那里拿走。也就是说 MDL3 的更新一直在 Chef 的看门狗下面跑（只是这台机器上没有超过 3 秒的调用）。0.2.1 后猜的“中间写文件”是错的。0.2.3 改在游戏的全局表上摘 | 0.2.2 的 `chef_handoff.log`（`around the globals`、`still on the globals ... update, shutdown` 等行）、`chef_loader.log`；见 [`docs/chef-under-mdl3.md`](docs/chef-under-mdl3.md) |
 | 0.2.3 + Chef 1.5.1 | 作者：跑起来正常。Chef 的日志里**没有** `running the callbacks ...` 了：Chef 第一次没有收下 MDL3 的任何回调；HUDdle、Treasure Radar 启动，认出任务世界，退出 `shutdown (clean)`。交接 addon 用的是游戏的全局表（`getfenv(0)`，它没有元表），Chef 加载后那里是 Chef 的四个回调，MDL3 的更新每帧一次、在 Chef 后面。MDL3 的 mod 库扫描也正常 | 0.2.3 的 `chef_handoff.log`、`chef_loader.log`、`MDL.log` |
@@ -41,7 +41,7 @@ ESC 那次闪退没有找到原因，0.2.0 也没有做任何针对它的改动�
 4. 0.2.0 多做一步：MDL3 也会"启动"Chef 的 mod（给它们的不是 Chef，多数会报错）。没报错的（Treasure Radar）会被 Chef 当作"已经被别的加载器启动"而跳过。
    所以交接前，这个 mod 读游戏的补丁文件找出做给 Chef 的 addon，把它们从 `package.loaded` 里摘掉，让 Chef 正常启动它们。
    怎么认：带 `-- HD2-Addon:` 头的 Lua 里，再有**行首的 `local chef = ...`**（Chef 把工具表交给 addon 的惯用写法），或者 `-- HD2-Requires: chef-shared-loader` 头行，就是做给 Chef 的。规则的细节和会漏掉什么见 [`docs/chef-under-mdl3.md`](docs/chef-under-mdl3.md)。
-5. Chef 1.5 起，交接来的启动脚本的回调（游戏全局表上的 `update`、`render`、`shutdown`：MDL3 自己的）会被 Chef 保管，在它自己的回调之后运行，并且放在它的卡死看门狗下面：一次调用超过 3 秒就判卡死，整条链被终止，MDL3 也就停了。
+5. 交接来的启动脚本的回调（游戏全局表上的 `update`、`render`、`shutdown`：MDL3 自己的）会被 Chef 保管，在它自己的回调之后运行，并且放在它的卡死看门狗下面（Chef 1.4.0 起就有，1.4.1 和 1.5.x 都是）：一次调用超过 3 秒就判卡死，整条链被终止，MDL3 也就停了。
    所以交接时不把这些回调交给 Chef：Chef 加载期间先从**游戏的全局表**上摘下（`getfenv(0)`，Chef 的核心就是从这张表读的），加载完再放回它自己的回调后面（Chef 的先，MDL3 的后，游戏照常调用）。
    0.2.1、0.2.2 摘的是这个 mod 自己的 `_G`，可 MDL3 给每个 addon 的 `_G` 是一个沙箱，所以没摘到（0.2.2 的日志显示的）。0.2.3 改了；那张表要是守着它没有的键（`__newindex`），就不摘下，换上空的替身，让 Chef 的赋值落在表上。
    `chef_handoff.log` 写着用的是哪张表、交接前后那里的四个回调各是什么，以及交接后 MDL3 的更新每帧跑几次（一次正常，两次说明 Chef 也在跑它）。
@@ -52,7 +52,7 @@ ESC 那次闪退没有找到原因，0.2.0 也没有做任何针对它的改动�
 
 完整说明在 [`handoff/README.md`](handoff/README.md)。要点：
 
-1. 你已经有 MDL3、Chef Shared Loader（1.2.0 以上；**1.5.x 请用本 mod 的 0.2.3**）和要用的 mod。
+1. 你已经有 MDL3、Chef Shared Loader（1.2.0 以上；**请用本 mod 的 0.2.3**，Chef 1.4.x 和 1.5.x 都是）和要用的 mod。
 2. 从本仓库的 Releases 页下载 `Chef-Hand-off-for-MDL3-0.2.3.zip`（[`dist/`](dist/Chef-Hand-off-for-MDL3-0.2.3.zip) 里是同一个文件），加进 Arsenal / HD2 Mod Manager 并启用。
 3. **MDL3 的优先级要比 Chef 高**（游戏运行的 boot 必须是 MDL3 的）。Arsenal 里：设置是 *First mod highest priority* 就把 MDL3 放在 Chef 上面，是 *Last mod highest priority* 就放在下面。这和 Chef、HUDdle 的说明（要求 Chef 最高）相反。
 4. 建议把本mod放在MDL3和Chef之间。

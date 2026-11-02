@@ -7,8 +7,8 @@
 --     (the log: "still on the globals right after they were taken off: update, shutdown"); init is the addon's own too, and unset;
 --   * everything else, render included, is the game's global table;
 --   * the game's update, render and shutdown are MDL3's own, in that table: that is where Chef's core finds them when it is required.
--- MDL3's update has one SLOW call, as in F (3.6 s of CPU time at the 900th frame, after the hand-off): Chef from 1.5.0 stops a
--- chain it runs itself. With the hand-off 0.2.2 Chef keeps MDL3's update and shutdown ("running the callbacks ... (2)", as in the
+-- MDL3's update has one SLOW call, as in F (3.6 s of CPU time at the 900th frame, after the hand-off): Chef (1.4.1 and 1.5.x) stops
+-- a chain it runs itself. With the hand-off 0.2.2 Chef keeps MDL3's update and shutdown ("running the callbacks ... (2)", as in the
 -- game) and its watchdog switches MDL3 off at that call.
 local GT = _G
 rawset(GT, 'CowboyBingusModLoader', { version = 21, api = 1, revision = 'stand-in-mdl3-sandbox', modules = {}, game = { build_identifier = 'sim' },

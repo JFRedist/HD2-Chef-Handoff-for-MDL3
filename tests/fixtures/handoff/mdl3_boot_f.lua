@@ -1,6 +1,6 @@
 -- Variant F of the stand-in: like A (addons started once the game calls init), but its update chain has one SLOW call: 3.6 s of
 -- CPU time at the 900th frame (15 s in, after the hand-off), the way a loader that does real work in its update can have one long
--- frame. A Chef from 1.5.0 that ran this chain itself, as "a boot script's callbacks", would call that a hang (a call over 3 s) and
+-- frame. A Chef (1.4.1 or 1.5.x) that ran this chain itself, as "a boot script's callbacks", would call that a hang (a call over 3 s) and
 -- switch the chain off: MDL3 with it. The hand-off addon must keep the chain out of Chef's hands, so nothing of the kind happens.
 rawset(_G, 'CowboyBingusModLoader', { version = 21, api = 1, revision = 'stand-in-mdl3', modules = {}, game = { build_identifier = 'sim' },
   open_log = function() return { write = function() end, close = function() end } end })

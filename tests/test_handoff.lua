@@ -433,7 +433,7 @@ G.frames(2)
 check(G.updates - before_raise == 120, 'the chain runs every frame (' .. G.updates - before_raise .. ')')
 check((read(G.path('chef_handoff.log')) or ''):find('Chef\'s update raised an error', 1, true), 'the log says so')
 
-print('== a slow call of the chain is written to the log (Chef 1.5 would have stopped it)')
+print('== a slow call of the chain is written to the log (Chef 1.4.1 and 1.5.x would have stopped it)')
 G = game{ name = 'slow', fake_cpu = true }
 G.frames(7)
 G.burn = 1.2

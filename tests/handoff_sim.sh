@@ -53,7 +53,7 @@ need 'boot scripts of mine, not run: .*my start-up stub' "$A" 'Chefs own boot st
 need 'started mods/jfredist/handoff_standin 0\.0\.1' "$A" 'a mod made for Chef starts'
 need '\[mods/jfredist/handoff_standin\] stand-in addon started on Chef Shared Loader 1\.[0-9]+\.[0-9]+' "$A" 'and runs on Chefs API'
 need 'mods/jfredist/chef_handoff: already started by .* not started again' "$A" 'Chef does not start the hand-off addon a second time'
-refuse 'running the callbacks the boot script in .* set before it started me' "$A" 'Chef is not given the other loaders callbacks to keep (Chef from 1.5.0 would run them under its hang watchdog)'
+refuse 'running the callbacks the boot script in .* set before it started me' "$A" 'Chef is not given the other loaders callbacks to keep (Chef 1.4.1 and 1.5.x would run them under its hang watchdog)'
 need 'stand-in addon: [0-9]{3,} frames' "$A" 'the stand-in addon ran for the whole session'
 need 'drawn: [1-9][0-9]* rects' "$A" 'and drew in the mission'
 need '\[stand-in mdl3\] shutdown; updates seen: (1[7-9][0-9]{2}|[2-9][0-9]{3})' "$A" 'the other loaders update went on being called every frame (about 3600 in 60 s)'
@@ -104,7 +104,7 @@ need 'stand-in 2: [0-9]{3,} frames' "$E" 'the second one ran on Chef for the who
 need 'taken off package.loaded, so that Chef starts them: .*handoff_standin2' "$(kept "$SCRATCH/keep_e" 'chef_handoff.log')" 'chef_handoff.log: it says it took them off the list'
 refuse 'GAME CRASH|would have ended| ERR |blocked:' "$E" 'no crash, no ERR, nothing blocked'
 
-echo '== F: the other loader has one slow update call (3.6 s of CPU time, 15 s in): Chef from 1.5.0 would stop a chain it ran itself'
+echo '== F: the other loader has one slow update call (3.6 s of CPU time, 15 s in): Chef (1.4.1 and 1.5.x) would stop a chain it ran itself'
 run_variant f mod_f.json "$FIX/standin_chef_addon.lua" "$FIX/standin_chef_addon_norequires.lua"
 F="$SCRATCH/f.txt"
 need "started by MDL3 chef_handoff $VERRE, which handed off to me" "$F" 'the hand-off comes'

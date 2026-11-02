@@ -25,19 +25,19 @@ MDL3 自己仍然是按它的方式看这些 mod 的（它的 `MDL.log` 里 HUDd
 只看每个 Lua 的前 16 KB，超过 4 MB 的 Lua（比如 BF5 反馈）不读。两样都没有的 Chef mod 认不出来，症状和原来的 Treasure Radar 一样：`chef_loader.log` 里有 `already started by another loader (started)`。
 规则的完整说明和会漏掉什么，见 [`docs/chef-under-mdl3.md`](../docs/chef-under-mdl3.md)。
 
-## 0.2.1 比 0.2.0 多了什么：和 Chef 1.5.x 一起用
+## 0.2.1 比 0.2.0 多了什么：Chef 的卡死看门狗
 
 Chef 被交接时，会把当时游戏里的 `init`、`update`、`render`、`shutdown`（MDL3 和它的 mod 串起来的那条链）收下，在它自己的回调之后每帧运行，当作"一个启动脚本的回调"。
-Chef 1.5.0 起，这些回调**放在它的卡死看门狗下面**：一次调用超过 3 秒没返回，就判卡死、终止，整条链被关掉，MDL3 和它的 mod 也就停了。
-（Chef 1.5.0 的更新记录里写的："A boot script's update hooks are now covered by the hang watchdog and end when the script stops."）
-0.2.0 在 1.5.x 上就会这样；1.4.1 没有这一条，所以 1.4.1 上一直正常。
+这些回调**放在它的卡死看门狗下面**：一次调用超过 3 秒没返回，就判卡死、终止，整条链被关掉，MDL3 和它的 mod 也就停了。
+看门狗是 Chef 1.4.0 加的，1.4.1 和 1.5.x 都这样调用收下的回调（1.4.1 的 `call_boots` 在调用前就登记了主人）。
+**更正：** 这里原来写着“只有 1.5.0 起才这样，1.4.1 上一直正常”，根据的是 Chef 1.5.0 更新记录里的一句（"A boot script's update hooks are now covered by the hang watchdog..."），那句说的是另一回事。2026-11-02 用真实的 Chef 1.4.1 在模拟器里补测，0.2.0 下对方的更新链同样被终止。作者的机器上 0.2.0 + 1.4.1 没出事，只是因为 MDL3 没有超过 3 秒的调用。
 
 0.2.1 不再把这些回调交给 Chef：交接时先把它们从全局里摘下来，Chef 加载完再放回去，放在 Chef 自己的回调后面（Chef 的先，MDL3 的链后，游戏照常调用）。
 这样 Chef 不拥有、不计时、不终止 MDL3 的回调，不管 MDL3 的某次调用多久，Chef 的看门狗都不会判它卡死。Chef 自己的 mod 照常受看门狗保护。（在真实的 MDL3 下 0.2.1、0.2.2 没有做到，0.2.3 才做到，见下面两节。）
 Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次调用超过 0.5 秒 CPU 时间时，`chef_handoff.log` 会记一行 `took N ms of CPU time`，并且在交接前后各记一行调试钩子的状态（`debug hook before / after`），这些在排查时有用。
 
-**模拟器：** 在 Chef 自带的模拟器里，用真实的 Chef 1.5.1 复现了问题（0.2.0 下，对方更新链里一次 3.6 秒的调用被 `stopped by the hang watchdog: it ran over 3 s` 中止，接着 Chef 记 `switched off boot:... for this session: it hung`，整条链从此不再被调用），0.2.1 下不会；1.4.1 上两版都正常。
-真实的 MDL3 为什么会有超过 3 秒的调用（或者别的什么让 Chef 判它卡死），没有 0.2.0 + 1.5.x 的日志，仍然不知道。
+**模拟器：** 在 Chef 自带的模拟器里，用真实的 Chef 1.5.1 和 1.4.1 复现了问题（0.2.0 下，对方更新链里一次 3.6 秒的调用被 `stopped by the hang watchdog: it ran over 3 s` 中止，接着 Chef 记 `switched off boot:... for this session: it hung`，整条链从此不再被调用），0.2.1 下不会（没有沙箱的加载器下）。
+真实的 MDL3 为什么会有超过 3 秒的调用（或者别的什么让 Chef 判它卡死），没有那样的真机日志，仍然不知道。
 
 ## 0.2.2：多记日志（它对原因的猜测是错的）
 
@@ -68,7 +68,7 @@ Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次�
 
 ## 安装
 
-1. 你已经有：MDL3 和它的 mod（BF5 反馈）、Chef Shared Loader（1.2.0 以上；真机上测过 1.4.1 和 1.5.1，**1.5.x 请用 0.2.3**）、HUDdle 等 Chef 的 mod。
+1. 你已经有：MDL3 和它的 mod（BF5 反馈）、Chef Shared Loader（1.2.0 以上；真机上测过 1.4.1 和 1.5.1；**请用 0.2.3**，Chef 1.4.x 和 1.5.x 都是）、HUDdle 等 Chef 的 mod。
 2. 把 `dist/Chef-Hand-off-for-MDL3-0.2.3.zip` 加进 Arsenal / HD2 Mod Manager 并启用。
 3. **优先级：MDL3 的优先级要比 Chef 高**（说的是优先级，不是"先加载"：优先级高的那个启动器，游戏才会运行它）。其余 mod 的顺序没关系（本 mod 见下一步）。
    Chef 和 HUDdle 的说明都要求 Chef 的优先级最高，这里正相反：游戏运行的 boot 必须是 MDL3 的。

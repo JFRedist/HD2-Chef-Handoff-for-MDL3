@@ -1,7 +1,7 @@
 # 在 MDL3 下运行 HUDdle：让 Chef 在 MDL3 里启动
 
 **状态**：交接 addon 0.2.0 在真机上可用（MDL3 3.0.0-dev.29，Chef 1.4.1，HUDdle 0.6.11，Treasure Radar 0.7.1n，BF5 击杀反馈 MDL3 版）。
-Chef 1.5.x 和 0.2.0 不兼容（Chef 把 MDL3 的回调放在它的卡死看门狗下面）。0.2.1、0.2.2 想修，真机上和 Chef 1.5.1 一起跑过（Chef 的 mod 和 BF5 都正常，没有判谁卡死），但 Chef 两次都收下了 MDL3 的两个回调。0.2.2 的日志说明了原因：**MDL3 给每个 addon 一个沙箱**，0.2.1、0.2.2 摘的只是沙箱里的，MDL3 真正的 `update`、`shutdown` 一直在 Chef 的看门狗下面。0.2.3 改在游戏的全局表上摘，**真机上确认了**：Chef 1.5.1 不再收下 MDL3 的任何回调，MDL3 的更新在 Chef 后面每帧运行一次。见“Chef 1.5.x”和“第四次”到“第六次真机结果”。
+Chef 1.4.1 和 1.5.x 都会把 0.2.0 交给它的 MDL3 回调放在它的卡死看门狗下面（原来以为只有 1.5.x，见“更正：Chef 1.4.1 也是这样”）。0.2.1、0.2.2 想修，真机上和 Chef 1.5.1 一起跑过（Chef 的 mod 和 BF5 都正常，没有判谁卡死），但 Chef 两次都收下了 MDL3 的两个回调。0.2.2 的日志说明了原因：**MDL3 给每个 addon 一个沙箱**，0.2.1、0.2.2 摘的只是沙箱里的，MDL3 真正的 `update`、`shutdown` 一直在 Chef 的看门狗下面。0.2.3 改在游戏的全局表上摘，**真机上确认了**：Chef 1.5.1 不再收下 MDL3 的任何回调，MDL3 的更新在 Chef 后面每帧运行一次。见“Chef 1.5.x”和“第四次”到“第六次真机结果”。
 0.2.1 那次 MDL3 里所有 mod 的分类都显示“未知”：MDL3 自己读文件的服务在启动时就坏了，早于交接；0.2.2 那次又正常了。见“第四次真机结果”和“第五次真机结果”。
 还没有解释的一件事：任务中 ESC 回飞船闪退过一次（0.1.0），原因没找到，之后没有再出现。见“ESC 回飞船闪退”和“还没有确认的”两节。
 使用说明在 [`handoff/README.md`](../handoff/README.md)，项目概览在 [`README.md`](../README.md)。
@@ -45,7 +45,7 @@ require('mods/chef_shared_loader/core_1')
    `ModOptionsMenu`……）里有什么，交接的结果，Chef 的版本。几十行。
 
 **回调（0.2.1 起）**：Chef 被交接时，会把当时的 `init`、`update`、`render`、`shutdown`（MDL3 和它的 mod 串起来的链）收下，每帧在自己的回调之后运行
-（0.2.0 和 Chef 1.4.1 的日志里是 *"running the callbacks the boot script ... set before it started me (3)"*）。Chef 1.5.0 起这样收下的回调在它的卡死看门狗下面，见“Chef 1.5.x”一节。
+（0.2.0 和 Chef 1.4.1 的日志里是 *"running the callbacks the boot script ... set before it started me (3)"*）。这样收下的回调在它的卡死看门狗下面（1.4.1 和 1.5.x 都是），见“Chef 1.5.x”一节和“更正：Chef 1.4.1 也是这样”。
 所以 0.2.1 在交接前把这四个全局先摘下来（Chef 加载时看到的是空的，就没有东西可收），Chef 加载完再放回去：`update`、`render`、`shutdown` 放在 Chef 自己的回调后面（Chef 的先，MDL3 的链后，用 `pcall` 隔开 Chef 的，MDL3 的错误照原样交给游戏），
 `init` 不放回（游戏早就调用过 MDL3 的，也不会再调用）。Chef 没起来（核心报错）时，原样放回。
 0.2.2 起，摘下到 Chef 读完全局之间只运行 `rawset` 和 `require`，并把四个回调在加载时、交接前、Chef 加载后各是什么写进日志。
@@ -67,7 +67,7 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 | 检查 | 内容 |
 |---|---|
 | `tests/test_handoff.lua`（120 项） | 假游戏里：6 秒前不交接、之后交接一次、便条内容、状态文件、日志、`update` 链保持；0.2.1 起还有：Chef 加载时看不到游戏的回调、`update` / `render` / `shutdown` 里 Chef 的先于链、`init` 是 Chef 的、核心失败时回调原样放回、Chef 的回调报错不影响链、慢调用写进日志、调试钩子的日志；0.2.2 起还有：一个在 mod 打开文件时把自己的 `render`、`shutdown` 放回去的加载器下 Chef 仍然看不到回调（0.2.1 在这一项上失败）、摘不掉的回调会被记下、更新链每帧跑一次 / 两次的判断和日志、回调和全局表的描述行（有没有 `debug`、`getmetatable`、`getfenv` 都能写）；0.2.3 起还有：照 0.2.2 真机日志做的 MDL3 沙箱模型（Chef 在游戏全局表上看不到 MDL3 的回调、MDL3 的更新不在 Chef 里面跑、每帧一次、核心失败时原样放回、`getfenv(0)` 不是游戏的表时照旧），和一个守着新键的游戏全局表（换替身，Chef 的回调落在表上）；Chef 没装 / 已在运行 / 上次崩溃 / 核心报错 / 各种奇怪的游戏（没有 `can_get`、没有 `update`、坏 dt、加载两次、没有文件夹）。Chef 的全局在假游戏里是只读代理（像真的一样），这一点是真实 Chef 的模拟器测试抓出来的 |
-| `tests/handoff_sim.sh`（真实的 Chef 1.4.1 和 1.5.1，Chef 自带的模拟器；每个 86 项，加上 D 是 90 项） | **A** 假 MDL3 在 `init` 里启动 addon；**B** 假 MDL3 在 `boot` 里启动 addon，并先用普通 `require` 试 Chef 的 mod（登记在 Bingus 式的 `modules` 表里）；**E** 同 B，但只留下 `package.loaded`（真实 MDL3 那一次显示的样子）；**F** 假 MDL3 的更新链里有一次 3.6 秒 CPU 时间的慢调用（Chef 1.5.x 会把它判成卡死，见下）；**G** 假 MDL3 在有人打开文件时把自己的 `render`、`shutdown` 放回去（0.2.1 之后的猜测，后来证明不是真机的原因，留着检查交接中间不运行别的东西）；**H** MDL3 的沙箱，照 0.2.2 的真机日志做的，加一次 3.6 秒的慢调用（0.2.2 下逐行写出和真机一样的日志，Chef 1.5.1 写出 `(2)` 并把 MDL3 判成卡死；0.2.3 下都没有，见“第五次真机结果”）；**C** 假 MDL3 自己已经交接。 B、E 里有一个像 Treasure Radar 的替身（没有 `HD2-Requires` 头，普通 `require` 不报错）：0.1.0 会把它漏掉（和真机日志里同一句 `already started by another loader (started)`），0.2.0 启动它。检查：Chef 报告被谁交接、自己的 boot stub 没有运行、Chef 的 mod 启动并绘制、交接 addon 不会被 Chef 再启动一次、假 MDL3 的回调（3 个，没有 `init`）每帧照常运行（60 秒约 3600 次）、Chef 没有收下它们、更新链每帧只跑一次、游戏的 `init` 恰好一次、`shutdown` 恰好一次（G）、日志和状态文件。可选 **D**：设置 `HUDDLE_LUA` 用真实的 HUDdle 0.6.11（不在仓库里） |
+| `tests/handoff_sim.sh`（真实的 Chef 1.4.1 和 1.5.1，Chef 自带的模拟器；每个 86 项，加上 D 是 90 项） | **A** 假 MDL3 在 `init` 里启动 addon；**B** 假 MDL3 在 `boot` 里启动 addon，并先用普通 `require` 试 Chef 的 mod（登记在 Bingus 式的 `modules` 表里）；**E** 同 B，但只留下 `package.loaded`（真实 MDL3 那一次显示的样子）；**F** 假 MDL3 的更新链里有一次 3.6 秒 CPU 时间的慢调用（Chef 1.4.1 和 1.5.x 都会把它判成卡死，见下）；**G** 假 MDL3 在有人打开文件时把自己的 `render`、`shutdown` 放回去（0.2.1 之后的猜测，后来证明不是真机的原因，留着检查交接中间不运行别的东西）；**H** MDL3 的沙箱，照 0.2.2 的真机日志做的，加一次 3.6 秒的慢调用（0.2.2 下逐行写出和真机一样的日志，Chef 1.5.1 写出 `(2)` 并把 MDL3 判成卡死；0.2.3 下都没有，见“第五次真机结果”）；**C** 假 MDL3 自己已经交接。 B、E 里有一个像 Treasure Radar 的替身（没有 `HD2-Requires` 头，普通 `require` 不报错）：0.1.0 会把它漏掉（和真机日志里同一句 `already started by another loader (started)`），0.2.0 启动它。检查：Chef 报告被谁交接、自己的 boot stub 没有运行、Chef 的 mod 启动并绘制、交接 addon 不会被 Chef 再启动一次、假 MDL3 的回调（3 个，没有 `init`）每帧照常运行（60 秒约 3600 次）、Chef 没有收下它们、更新链每帧只跑一次、游戏的 `init` 恰好一次、`shutdown` 恰好一次（G）、日志和状态文件。可选 **D**：设置 `HUDDLE_LUA` 用真实的 HUDdle 0.6.11（不在仓库里） |
 | 变异检查（一次性的手工检查，脚本没有放进仓库） | 0.1.0：故意改坏 9 处（没有延迟、没有 `phase`、不检查 Chef 在运行、忽略崩溃标记、不 `pcall`、不写 ok 标记、丢参数、不清便条、不检查 Chef 是否安装）：自写测试全部抓到；模拟器测试抓到其中会影响真实 Chef 行为的三处（延迟、`phase`、已在运行的检查）。0.2.0 又加了 11 处（补丁文件的读法、判断做给 Chef 的规则、摘掉的范围等），自写测试全部抓到，只有一个防御性的等价变异除外。0.2.1 再加 7 处（不摘回调、放回时不放在 Chef 后面、顺序反了、核心失败时不放回、不隔开 Chef 的错误、不记慢调用、把 `init` 放回去），全部抓到（其中两处是测试脚本因此直接报错退出）。0.2.2：把 0.2.1 本身当作“变异”跑新测试，守卫模型那一项失败，模拟器的 G 也失败。0.2.3：把 0.2.2 当作变异，沙箱模型的各项和模拟器的 H 都失败；去掉替身那一步，守着新键的全局表那几项失败 |
 
 ## 第一次真机结果（2026-11-02，MDL3 3.0.0-dev.29，Chef 1.4.1）
@@ -157,11 +157,11 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 - Chef 1.5.0 的更新记录：*"A boot script's update hooks are now covered by the hang watchdog and end when the script stops."* 看门狗的规则（1.5.1 的 `docs/MODDING.md`）：对一个 mod 的任何调用运行超过 3 秒，就用错误中止它，并在下一帧把整个 mod 关掉。
   收下的 MDL3 回调从 1.5.0 起属于这一类：`call_boot` 在调用前登记“这次调用的主人是 MDL3 的启动脚本”，看门狗的钩子每 100 万条指令看一次钟。
 - 1.5.1 的更新记录说它修了“看门狗无故关掉健康的 mod”和“游戏偶尔的一次卡顿不再算在 mod 头上”，这没有改变上面这一点：MDL3 的链里只要有一次调用的 Lua 连续跑了 3 秒以上，就算卡死。
-- 1.4.1 没有这一条：同样的调用没人计时。所以交接 addon 0.2.0 在 1.4.1 上一直正常，在 1.5.x 上不行。
+- ~~1.4.1 没有这一条：同样的调用没人计时。所以交接 addon 0.2.0 在 1.4.1 上一直正常，在 1.5.x 上不行。~~ **错了**，见下面“更正：Chef 1.4.1 也是这样”。
 
 **复现**（`tests/handoff_sim.sh` 的变体 F，真实的 Chef 核心，Chef 自带的模拟器；用的 1.5.1 就是作者上传的那个包：用标签 `v1.5.1` 的源码重新构建，zip 逐字节一样，sha256 `79b4ff67…370d`）：假 MDL3 的更新链在第 900 帧有一次 3.6 秒 CPU 时间的调用。
 0.2.0 + Chef 1.5.1：`the boot script in ...: update error: stopped by the hang watchdog: it ran over 3 s (an endless loop?)`，接着 `switched off boot:... for this session: it hung (a call ran over 3 s)`，屏幕上也有一条 `... STOPPED: IT HUNG (SEE CHEF_LOADER.LOG)` 的提示；那次调用被中止，整条链从此不再被调用（假 MDL3 的 `shutdown` 行也没有了）。
-0.2.0 + Chef 1.4.1：没有这一行，链一直跑。0.2.1 + Chef 1.5.1 和 1.4.1：没有这一行，链每帧都跑，慢的那一次在 `chef_handoff.log` 里记一行 `took 3600 ms of CPU time`，Chef 的 mod 照常运行。
+0.2.0 + Chef 1.4.1：~~没有这一行，链一直跑~~ 这一句原来写错了（没有实际跑过），2026-11-02 补测：同样被终止。0.2.1 + Chef 1.5.1 和 1.4.1：没有这一行，链每帧都跑，慢的那一次在 `chef_handoff.log` 里记一行 `took 3600 ms of CPU time`，Chef 的 mod 照常运行。
 
 **修法**：不把 MDL3 的回调交给 Chef。见上面“回调（0.2.1 起）”。这样 Chef 不拥有、不计时、不终止它们（模拟器里如此；真机上 0.2.1 还是让 Chef 收下了两个，见“第四次真机结果”，0.2.2 针对这个）。对方自己用调试钩子的三种做法（每帧设置并还原 / 设置了不还原 / 清除）也在 Chef 1.5.1 上试过，没有出问题。
 
@@ -170,6 +170,17 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 - **评论里的“卡死”。** 没有 0.2.0 + 1.5.x 的真机日志，所以**不知道真实的 MDL3 在哪一次调用里超过了 3 秒**，也不知道评论里说的“卡死”是不是就是这条看门狗（它的日志行应该是 `... update error: stopped by the hang watchdog ...` 和 `switched off boot:... for this session: it hung`）。
   这个修法不依赖原因：Chef 不收下的回调，它就不给计时。0.2.1 + Chef 1.5.1 的那次真机运行（“第四次真机结果”）没有判卡死，`chef_handoff.log` 也没有记到超过 0.5 秒的调用。
 - **Chef 的 mod 在 MDL3 菜单里的错误**没有处理：本 mod 不去改 MDL3 怎么显示它们。MDL3 的菜单怎么读它的内部状态我没看过，直接改它的表有风险。
+
+### 更正：Chef 1.4.1 也是这样（2026-11-02）
+
+作者转述：Chef 1.4.1 下也有人遇到 MDL 被 Chef 的看门狗终止。核对之后，上面“1.4.1 没有这一条”是错的：
+
+- 看门狗是 Chef **1.4.0** 加的（1.4.0 的更新记录：“A hang watchdog: a mod's call that runs on for more than 3 s ... is stopped”）。
+- 1.4.1 的 `call_boots`（调用收下的回调的地方）在调用前就 `D.enter(b, t0)`，除了 `shutdown`：收下的 `update`、`render` 在 1.4.1 里已经在看门狗下面。
+- 1.5.0 那一句 “A boot script's update hooks are now covered by the hang watchdog and end when the script stops” 说的是另一回事（启动脚本的 update 钩子），我把它读成了“1.5.0 起才这样”。“0.2.0 + Chef 1.4.1 没有这一行”那一句也不是跑出来的。
+- 补测（真实的 Chef 1.4.1，提交 `400cc03`，Chef 自带的模拟器）：0.2.0 在变体 F 上 `update error: stopped by the hang watchdog: it ran over 3 s`、`switched off boot:... for this session: it hung`；0.2.2 在变体 H（MDL3 的沙箱）上一样；**0.2.3 在 F 和 H 上都没事**（慢调用跑完，看门狗没有动作）。
+- 所以作者的机器上 0.2.0 + 1.4.1 一直正常，只是因为 MDL3 没有超过 3 秒的调用。0.2.3 的修法不依赖 Chef 的版本：MDL3 的回调根本不交给 Chef，哪个版本的看门狗都碰不到。真机上 0.2.3 只和 1.5.1 一起跑过；1.4.1 收下回调的代码和 1.5.1 一样（核心一开始从全局表读那四个），所以结果应当相同。
+- 0.2.3 的 Lua 文件开头的注释里还写着 “From 1.5.0 it does that under its hang watchdog”，下一个版本改；已经发布的 v0.2.3 的说明里也有“Chef 1.5.0 起”的说法。
 
 ## 第四次真机结果（2026-11-02，0.2.1 + Chef 1.5.1）
 

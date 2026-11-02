@@ -19,6 +19,7 @@
 - 交接 addon 0.2.2（见下）。`tests/handoff_sim.sh` 加了变体 G 和几项日志检查；0.2.1 的发布说明没有发布过，换成 0.2.2 的。
 - 记下 0.2.2 + Chef 1.5.1 的真机结果（“第五次真机结果”）：MDL3 的沙箱；0.2.1、0.2.2 在真实的 MDL3 下只把 `render` 拿出了 Chef 的手；“中间写文件”的猜测是错的。那次 MDL3 的分类正常。
 - 记下 0.2.3 + Chef 1.5.1 的真机结果（“第六次真机结果”）：修法在真机上起作用。
+- 文档：Chef 的菜单键（F9）和由 MDL3 运行、自己用 F9 的 mod 冲突（作者遇到的是 First Person Camera by Webbox），改法是把 Chef 的菜单键改到别的键；以及 Chef 菜单里 “Run by MDL3 chef_handoff” 那一行的意思。
 - 交接 addon 0.2.3（见下）。`tests/handoff_sim.sh` 加了变体 H（照 0.2.2 真机日志做的 MDL3 沙箱 + 一次慢调用）；`tests/test_handoff.lua` 加了沙箱模型和守着新键的全局表。0.2.2 的发布说明没有发布过，换成 0.2.3 的。
 
 ## Chef Hand-off for MDL3

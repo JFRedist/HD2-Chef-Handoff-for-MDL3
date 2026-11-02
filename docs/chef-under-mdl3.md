@@ -283,6 +283,25 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 **结论**：在真机上，0.2.3 让 MDL3 的回调离开了 Chef 的手：Chef 不再收下它们，MDL3 的更新在 Chef 后面、它的看门狗外面每帧运行一次。
 **没有在真机上验证的**：看门狗真的碰上 MDL3 一次超过 3 秒的调用时会怎样（这台机器上没有这种调用；模拟器的变体 H 里 0.2.3 下没事）；更长的运行（这一次约 1 分 45 秒，任务里约半分钟）。
 
+## 按键冲突：MDL3 下运行、自己用 F9 的 mod（2026-11-02）
+
+作者装了 **First Person Camera by Webbox**（Nexus 17827，Lua 里是 `First Person Camera 1.0.190-release`，资源 `mods/webbox/first_person_prototype`）之后，看到两件事：
+Chef 的菜单里它只有一行 “managed by handoff” 一类的说明，没有设置；它自己有独立的设置菜单，也能正常工作。把 Chef 的菜单键从 F9 改到 F10 之后一切正常。
+
+读它的 Lua（只读，没有运行）：
+
+- 头是 `-- HD2-Addon:`，两种加载器都能用。开头一段：`local api=...`，不是表就试 `rawget(G,'chef')`，要有 `loader_version` 和 `bind` 才当作 Chef 的工具表（注释：“Optional Chef API is used only for the original menu shortcut”）。
+  没有 `local chef = ...` 那种行首写法，也没有 `HD2-Requires` 头，所以交接 addon 不把它当成做给 Chef 的 mod，留给 MDL3：这是对的，它不用 Chef 也能完整运行。
+- 菜单键：有 Chef 的工具表时，它用 `chef.bind('original_menu_key', 'f10', ...)` 把自己的菜单键设成 F10；没有时用固定的 F9（`pressed(c and 'f10' or 'f9')`）。它自己的按键设置不让选 F9。
+- 它在启动时链上游戏的 `update`、`render`、`shutdown`，并用全局 `__webbox_first_person` 防止第二份。
+
+在这里 MDL3 启动它（MDL3 启动所有带 `HD2-Addon` 头的 Lua），它拿不到 Chef 的工具表，于是用 F9；交接之后 Chef 也在运行，菜单键默认也是 F9，一按两个菜单一起出来。
+Chef 的那一行：`package.loaded` 里有它，Chef 就不再启动它（`starter.elsewhere`），菜单里只列一行只读的说明（`svc.mod_left`，文字是 `'Run by ' .. host`）。
+`package.loaded` 只能说明是“别的加载器”，所以 `host` 用的是把游戏交给 Chef 的那一个的名字（`starter.host_name`：交接便条的 `from`，去掉版本号），也就是 “MDL3 chef_handoff”；实际运行它的是 MDL3。
+
+**改法**：把 Chef 的菜单键改到别的键（Chef 的 README：F9 > Chef Shared Loader > Open this menu；或者在 `chef_loader_settings.txt` 里放 `_loader<Tab>opt.menu_key<Tab>s<Tab><键>`）。改到 F10 之后，别再在这个摄像头 mod 里把按键设成 F10。
+同样的事可能发生在别的“两种加载器都能用”的 mod 上：它们在这里由 MDL3 运行，按“没有 Chef”的方式选键。
+
 ## ESC 回飞船闪退：知道什么，不知道什么
 
 三次相关的真机运行（时间是 Chef 日志里的本地时间）：

@@ -97,6 +97,8 @@ Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次�
 | BF5 反馈（MDL3）正常，HUDdle 没有 | MDL3 的优先级是对的，交接没成功：看 `chef_handoff.log` |
 | HUDdle 正常，BF5 反馈（MDL3）没有（也没有 `chef_handoff.log`） | Chef 的优先级还是高的（顺序摆反了）：把 MDL3 放到更高优先级，Purge 再 Deploy |
 | 两个都没有 | 看 `chef_handoff.log` 和 `chef_loader.log` |
+| 按 F9 时 Chef 的菜单和某个 mod 自己的菜单一起出来 | 按键冲突，见下面“可能的副作用”：把 Chef 的菜单键改到别的键 |
+| Chef 的菜单里某个 mod 只有一行 “Run by MDL3 chef_handoff”，没有开关和设置 | 正常：那个 mod 由 MDL3 运行，Chef 不再启动第二份；它的设置在它自己的菜单里 |
 
 ## 日志里的状态
 
@@ -123,6 +125,8 @@ Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次�
 - Chef 会把所有带 `HD2-Addon` 头的 mod 都看一遍，已经由 MDL3 启动的它会跳过（靠 `package.loaded` 和 MDL3 登记的列表）；真机日志里能看到 `hd2_data_hub` 这类被跳过。BF5 反馈的 Lua 有 6 MB，Chef 不读超过 4 MB 的 Lua。
   如果哪个 MDL3 的 mod 被 Chef 再启动了一份，`chef_loader.log` 里会有 `started mods/<作者>/<名字>`：在 Chef 的 F9 菜单里把它关掉，并告诉作者。
 - MDL3 设置里所有 mod 的分类都显示“未知”（名字正常）：0.2.1 那次真机出现过。那次 MDL3 自己读文件的服务在启动时就坏了（`MDL.log` 里每个 `sys list`、`sys tree` 都是 `attempt to index upvalue 'kernel' (a nil value)`），比交接早 6 秒。下一次（0.2.2）同样的安装就正常了（扫描 1306 毫秒，没有这种错误）。看起来是 MDL3 自己时有时无的问题，没有做过不启用本 mod 的对照。见 [`docs/chef-under-mdl3.md`](../docs/chef-under-mdl3.md)。
+- **按键冲突：Chef 的菜单键（默认 F9）。** 有些 mod 两种加载器都能用：Chef 给了它工具表，它就用 Chef 的；没给，它就自己处理按键。MDL3 会启动所有带 `HD2-Addon` 头的 mod，所以在这里它们由 MDL3 运行，以为没有 Chef，可能会用上 Chef 的 F9。作者遇到的是 **First Person Camera by Webbox**（1.0.190）：在 Chef 下它把自己的菜单键设成 F10，特意避开 Chef；在 MDL3 下它的菜单键固定是 F9（F6 切换第一人称），和 Chef 的菜单一按就一起出来。改法：把 Chef 的菜单键改到别的键。在 Chef 的菜单里按 F9 > Chef Shared Loader > Open this menu，按右方向键（或回车），再按新键（比如 F10）。不进菜单也行：关掉游戏，在 `%APPDATA%\Arrowhead\Helldivers2\chef_loader_settings.txt` 里放一行 `_loader<Tab>opt.menu_key<Tab>s<Tab>f10`（四段之间是 Tab 键，不是空格；已有 `opt.menu_key` 那一行就替换它；文件没有就新建）。作者改到 F10 之后两个都正常。之后在这个摄像头 mod 自己的按键设置里不要再选 F10（F9 它本来就不让选）。
+- **Chef 菜单里的 “Run by MDL3 chef_handoff”。** 别的加载器（这里是 MDL3）已经启动的 mod，Chef 不再启动第二份，只在菜单里列一行只读的说明，没有开关和设置。Chef 从 `package.loaded` 只能看出是“别的加载器”启动的，就写上把游戏交给它的那一个的名字，也就是本 mod 便条里的 `MDL3 chef_handoff`；实际运行那个 mod 的是 MDL3。这类 mod 的设置在它自己的菜单（或 MDL3 的菜单）里。
 - Chef 的 mod（HUDdle 之类）在 MDL3 自己的菜单和日志里会显示错误：`MDL.log` 里 HUDdle 是 `enable failed ... attempt to call field 'time' (a nil value)`，因为 MDL3 给它的不是 Chef，没有 `time`。这是 MDL3 眼里的失败，实际是 Chef 在运行它们，游戏里能正常用（评论里也有人这样说，作者转述）。本 mod 不去改 MDL3 怎么显示它们。
 
 ## 卸载

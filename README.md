@@ -65,6 +65,8 @@ ESC 那次闪退没有找到原因，0.2.0 也没有做任何针对它的改动�
 | BF5 反馈（MDL3）正常，HUDdle 没有 | 交接没成功：看 `%APPDATA%\Arrowhead\Helldivers2\chef_handoff.log` |
 | HUDdle 正常，BF5 反馈（MDL3）没有，也没有 `chef_handoff.log` | Chef 的优先级还是高的（摆反了） |
 | 都没有 | 看 `chef_handoff.log` 和 `chef_loader.log` |
+| 按 F9 时 Chef 的菜单和某个 mod 自己的菜单一起出来（比如 First Person Camera by Webbox） | 那个 mod 由 MDL3 运行，以为没有 Chef，就自己用 F9；Chef 的菜单默认也是 F9。把 Chef 的菜单键改到别的键：在 Chef 的菜单里按 F9 > Chef Shared Loader > Open this menu，按右方向键（或回车），再按新键（比如 F10）。不进菜单也行：关掉游戏，在 `%APPDATA%\Arrowhead\Helldivers2\chef_loader_settings.txt` 里放一行 `_loader<Tab>opt.menu_key<Tab>s<Tab>f10`（四段之间是 Tab 键，不是空格；已有 `opt.menu_key` 那一行就替换它；文件没有就新建）。详见 [`handoff/README.md`](handoff/README.md) |
+| Chef 的菜单里某个 mod 只有一行 “Run by MDL3 chef_handoff”，没有设置 | 正常：那个 mod 是 MDL3 在运行，Chef 不会再启动一份，也没有它的设置。它的设置在它自己的菜单里（或 MDL3 的菜单里） |
 
 反馈问题时请附上 `chef_handoff.log`、`chef_loader.log` 和 `MDL.log`。`MDL.log` 每次启动都会被覆盖，闪退后先把它拷出来再重开游戏。
 

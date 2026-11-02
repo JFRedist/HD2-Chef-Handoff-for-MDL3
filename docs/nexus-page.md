@@ -76,6 +76,8 @@ The earlier attempts (0.2.1, 0.2.2, never uploaded here) took them off the addon
 [*][b]Chef mods work, MDL3 mods do not (and there is no chef_handoff.log):[/b] Chef still has the higher priority. Swap them, Purge, Deploy.
 [*][b]A Chef mod does not start and chef_loader.log says "already started by another loader (started), not started again":[/b] 0.2.0 only recognises Chef addons that have a line starting with "local chef = ..." or a "-- HD2-Requires: chef-shared-loader" header. Tell me which mod it is.
 [*][b]Chef 1.5.x, and chef_loader.log says "switched off boot:... for this session: it hung":[/b] you are on 0.2.0. Chef judged MDL3's callbacks to be hung and stopped them. Update to 0.2.3.
+[*][b]F9 opens Chef's menu and a mod's own menu at the same time:[/b] some mods work under either loader and pick their keys by which one runs them. Here MDL3 runs them (it starts every HD2-Addon), so they act as if there were no Chef and may take F9, Chef's menu key. Example: First Person Camera by Webbox opens its menu with F9 under MDL3 (under Chef it would use F10). Move Chef's menu key: press F9, go to Chef Shared Loader > Open this menu, press Right, then the new key (for example F10). Then do not give F10 to the camera mod.
+[*][b]A mod shows in Chef's menu only as "Run by MDL3 chef_handoff", with no settings:[/b] that is normal. MDL3 runs it, so Chef does not start a second copy. Its settings are in its own menu.
 [*][b]"the last launch ended during the hand-off":[/b] the previous launch ended while handing off, so it was not tried again, to avoid a crash loop. Delete chef_handoff_state.txt to try again.
 [/list]
 
@@ -125,7 +127,7 @@ A Chef mod that has neither marker is not recognised.
 3. [b]MDL3 的优先级要比 Chef 高[/b]（这和 Chef、HUDdle 的说明相反）。Arsenal 的设置是 First mod highest priority，就把 MDL3 放在 Chef 上面；是 Last mod highest priority，就放在下面。拿不准：把 MDL3 放到你原来放 Chef 的位置，Chef 挪到它旁边。其余 mod 的顺序没关系。
 4. Purge，再 Deploy。启动游戏，在标题画面停 10 秒以上，再进一局任务。
 [b]怎么知道成功了：[/b]%APPDATA%\Arrowhead\Helldivers2\chef_handoff.log 里有 Chef Shared Loader 1.x.x started，稍后有 update chain ran 600 times ... once a frame；chef_loader.log 里有 started by MDL3 chef_handoff 0.2.3, which handed off to me，没有 running the callbacks；任务中出现 HUDdle，按 F9 出 Chef 的菜单，MDL3 的 mod 照常。
-[b]出问题时：[/b]MDL3 的 mod 正常、Chef 的 mod 没有：看 chef_handoff.log。Chef 的 mod 正常、MDL3 的 mod 没有（也没有 chef_handoff.log）：Chef 的优先级还是高的，对调后 Purge 再 Deploy。反馈时请附上 chef_handoff.log、chef_loader.log 和 MDL.log（MDL.log 每次启动会被覆盖，闪退后先拷出来再重开游戏）。
+[b]出问题时：[/b]MDL3 的 mod 正常、Chef 的 mod 没有：看 chef_handoff.log。Chef 的 mod 正常、MDL3 的 mod 没有（也没有 chef_handoff.log）：Chef 的优先级还是高的，对调后 Purge 再 Deploy。按 F9 时 Chef 的菜单和某个 mod 自己的菜单一起出来（比如 First Person Camera by Webbox）：那个 mod 由 MDL3 运行，以为没有 Chef，就用了 F9；把 Chef 的菜单键改到别的键（F9 > Chef Shared Loader > Open this menu，按右方向键再按新键，比如 F10），之后别把 F10 给那个 mod。Chef 菜单里某个 mod 只有一行 Run by MDL3 chef_handoff、没有设置：正常，它由 MDL3 运行，设置在它自己的菜单里。反馈时请附上 chef_handoff.log、chef_loader.log 和 MDL.log（MDL.log 每次启动会被覆盖，闪退后先拷出来再重开游戏）。
 [b]已知问题：[/b]0.1.0 下任务中按 ESC 回飞船闪退过一次，原因没找到，之后没有再出现。只在 MDL3 3.0.0-dev.29（预览版）上测过。Chef 的 mod 在 MDL3 的菜单里会显示错误，实际能正常运行。有一次 MDL3 里所有 mod 的分类都显示“未知”：那次 MDL3 自己读文件的服务在启动时就坏了，比交接早 6 秒，下一次同样的安装就正常了，看起来是 MDL3 自己时有时无的问题。0.2.3 在真机上只试过一次短的。
 [b]来源：[/b]代码、文档和问题反馈在 GitHub（MIT 许可）。代码是在 Claude（Anthropic 的 AI）的帮助下写的，由我在真实游戏里测试。
 [/spoiler]

@@ -384,12 +384,15 @@ Data Hub 和 MDL3 在同一个包里，要一起放在最高优先级，所以�
 - Rat 确实起来了（`SharedLoader-loader.log`：`the boot the game runs is not ours: MDL3 ... runs this loader as one of its boot scripts`；Chef：`running another mod's boot script too ...: patch_95 (Rat's Shared Loader)`），运行库 `running`，加载画面也正常出现、关掉。
 - 但 Transmog 和 Native Notification 都是 `elsewhere: Chef Shared Loader`：Rat 启动它们时，`package.loaded` 里已经有东西，Rat 就当别的加载器已经启动过。
 - 那是 MDL3 留下的：MDL3 也“启动”了它们，都失败了（`MDL.log`：Transmog `module 'hd2rt' not found`，Native Notification `require('ffi') is not available`）。Lua 5.1 的 `require` 先在 `package.loaded` 里放一个占位（light userdata），模块出错时不拿掉。Chef 看到这个占位，记成交接方“试过、没起来”（`left to MDL3 chef_handoff, which didn't start it`）；Rat 的检查（`elsewhere`）只放过空的和它自己的标记表，占位也算“别人启动过”。
-- 运行库不受影响：没有 Rat 时它不报错，返回 `{shared_loader = ...}` 这个 Rat 认得的标记，所以 Rat 照样启动了它。
+- 运行库看起来没受影响（Rat 记成 `running`），其实没有运行，见下面第一版 0.2.5 的真机结果。
 
-**0.2.5 改了什么**：读补丁时多认一种头，`-- @loader rat`（规则和 Rat、Chef 一样：文件开头那几行注释里，前 4096 字节，`@loader` 行都是 `rat`）。交接前，这些 mod 在 `package.loaded` 里如果只是 `require` 的占位（userdata），就拿掉；真在 MDL3 下跑起来、留下了值的不动，免得 Rat 再启动一份。日志多一行 `made for Rat's Shared Loader: ...; require's placeholder (MDL3 tried it and it failed) taken off, so that it starts them: ...`。
-照 Chef 和 Rat 的代码，拿掉以后：Chef 把 Transmog 当作“留给捆着运行库的那个加载器”，自己不启动；接着运行 Rat 的启动桩，Rat 看到 `package.loaded` 里没有它，就启动它。
+**第一版 0.2.5 的真机结果（2026-11-03 02:35）：Transmog 还是没有运行。** 第一版只拿掉 `require` 的失败占位。日志里占位确实拿掉了，Rat 也真去启动 Transmog 和 Native Notification 了（不再是 `elsewhere`），但两个都失败，错误和在 MDL3 里一样：`module 'hd2rt' not found`、`require('ffi') is not available`。
+原因在运行库：MDL3 先 `require` 过它，它找不到 Rat，返回 `{shared_loader = ...}` 这个“未启动”标记，标记就留在 `package.loaded` 里。Rat 的检查放过这种标记（它自己就用这种标记表示“没启动”），于是用 `require` 去启动运行库，可 `require` 看到 `package.loaded` 里已经有值，直接把标记还回来，**运行库的代码根本没再运行**。Rat 只看到没报错，就记成 `running`（`SharedLoader-session.txt` 里它的“开始加载”和“加载完”在同一毫秒，112 KB 的代码不可能这么快；运行库自己的日志一行都没写）。运行库没起来，就没有 `hd2rt` 给 Transmog，也没有 `HD2Runtime` 给 Native Notification（它就去走 `ffi` 那条路，被 MDL3 挡住）。
 
-`tests/test_handoff.lua` 加了例子（130 项）：失败占位被拿掉、真跑过的值留着、`@loader rat` 不在开头注释里的不算。0.2.4 在其中两项上失败。用作者游戏里真实的补丁文件（只读）、照那次 MDL3 留下的样子摆好 `package.loaded`：0.2.5 认出 3 个 Rat 的 mod，拿掉 Transmog 和 Native Notification 的占位，运行库的标记表留着。
+**0.2.5 改了什么**：读补丁时多认一种头，`-- @loader rat`（规则和 Rat、Chef 一样：文件开头那几行注释里，前 4096 字节，`@loader` 行都是 `rat`）。交接前，这些 mod 在 `package.loaded` 里如果是 MDL3 那次启动留下的东西，就拿掉：`require` 的失败占位（userdata），或者 Rat 的“未启动”标记（带 `shared_loader` 字段的表）。真在 MDL3 下跑起来、留下了别的值的不动，免得 Rat 再启动一份。日志多一行 `made for Rat's Shared Loader: ...; what MDL3's start of them left (require's placeholder, Rat's "not started" mark) taken off, so that it starts them: ...`。
+照 Chef 和 Rat 的代码，拿掉以后：Chef 把它们当作“留给捆着运行库的那个加载器”，自己不启动；接着运行 Rat 的启动桩，Rat 看到 `package.loaded` 里没有它们，就用 `require` 真正把运行库、Transmog、Native Notification 加载起来。
+
+`tests/test_handoff.lua` 加了例子（131 项）：失败占位和“未启动”标记被拿掉、真跑过的值留着、`@loader rat` 不在开头注释里的不算。0.2.4 在其中两项上失败。用作者游戏里真实的补丁文件（只读）、照那次 MDL3 留下的样子摆好 `package.loaded`：0.2.5 认出 3 个 Rat 的 mod，三个留下的东西都拿掉。
 
 **还剩下的**（本 mod 改不了）：Chef 的 F9 里这些 mod 写的是 “Run by MDL3 chef_handoff”（被交接时，Chef 把交接方当成运行它们的加载器）；Rat 的回调在 Chef 的卡死看门狗下面（Transmog 某次调用超过 3 秒，Chef 会把 Rat 整个关掉）；Rat 晚 6 秒才起来，加载画面会显示 READY WITH WARNINGS。
 **还没有在真机上验证。**

@@ -85,7 +85,7 @@ Tested in the game with MDL3 3.0.0-dev.29 and dev.33, Chef 1.4.1 and 1.5.1, HUDd
 
 | 栏 | 内容 |
 |---|---|
-| 文件 | `Chef-Hand-off-for-MDL3-0.2.5.zip`（GitHub 的 Release 页下载；sha256 `9511b35df18fe1ae8e4cc0f5f4f62000ede11f5f76216a438385ea2a2357a896`） |
+| 文件 | `Chef-Hand-off-for-MDL3-0.2.5.zip`（GitHub 的 Release 页下载；sha256 `f02388ee701eaa03938111689239100a50b48eca8488c206619f45c997716cfc`） |
 | 名称 | `Chef Hand-off for MDL3` |
 | 版本 | `0.2.5` |
 | 类型 | Main file |
@@ -103,7 +103,7 @@ Mod manager zip (Arsenal / HD2 Mod Manager). Needs MDL3 and Chef Shared Loader 1
 0.2.5：
 
 ```
-Works with Rat's Shared Loader below MDL3: Chef starts it after the hand-off, and it now starts HD2 Transmog (0.2.4 left require's placeholder from MDL3's failed start of Transmog in package.loaded, and Rat skipped it). Reads every patch file when there are more than 400 (0.2.4 stopped at patch_400). Not yet tested in the game.
+Works with Rat's Shared Loader below MDL3: Chef starts it after the hand-off, and it now starts HD2 Transmog (with 0.2.4, what MDL3's own start of these mods left in package.loaded made Rat skip them, or never run the runtime). Reads every patch file when there are more than 400 (0.2.4 stopped at patch_400). Not yet tested in the game.
 ```
 
 0.2.4：

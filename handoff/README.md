@@ -80,7 +80,7 @@ NarrowHUD 1.0.6 本身没有拿到，是用去掉头行的 NarrowHUD 2.2.0 代�
 ## 0.2.5 比 0.2.4 多了什么：Rat's Shared Loader 的 mod，和补丁文件超过 400 个时
 
 **Rat's Shared Loader（HD2 Transmog 要它）。** Rat 放在 MDL3 下面任意位置（不要放最高：那样 MDL3 会被当作它下面的普通 boot 脚本）。交接以后，Chef 会把 Rat 当作一个 boot 脚本拉起来，Rat 再启动 Transmog 这些标了 `-- @loader rat` 的 mod。
-0.2.4 下 Transmog 没有运行（Chef 的 F9 里是 “Left to MDL3 chef_handoff, not running”）：MDL3 先“启动”它失败，`require` 在 `package.loaded` 里留下一个占位，Rat 把它当作别人已经启动过，就跳过了。0.2.5 在交接前把这些 mod 的失败占位拿掉。真在 MDL3 下跑起来的不动。
+0.2.4 下 Transmog 没有运行（Chef 的 F9 里是 “Left to MDL3 chef_handoff, not running”）：MDL3 先“启动”过这些 mod，在 `package.loaded` 里留了东西，Rat 就不再真正启动它们。Transmog 失败留下的占位让 Rat 当作别人已经启动过；运行库留下的“未启动”标记让 Rat 的 `require` 直接返回，运行库的代码没运行，Transmog 也就找不到 `hd2rt`。0.2.5 在交接前把这两种都拿掉；真在 MDL3 下跑起来、留下别的值的不动。
 还剩下的：Chef 的 F9 里它们写 “Run by MDL3 chef_handoff”（实际是 Rat 在运行）；Rat 的回调在 Chef 的卡死看门狗下面；Rat 的加载画面会显示 READY WITH WARNINGS，因为它要求放最高。细节见 [`docs/chef-under-mdl3.md`](../docs/chef-under-mdl3.md) 的“Rat's Shared Loader 和 HD2 Transmog”一节。
 
 **补丁文件超过 400 个时。** 0.2.4 及以前，补丁扫描最多读到 `patch_400`。[issue #2](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/2) 的日志里，那位玩家有 529 个补丁文件，`chef_handoff.log` 只读了 400 个：再往后的 Chef mod，如果 MDL3 “启动”它时没报错（像 Treasure Radar 0.7.1 那样），本 mod 就不会把它从 `package.loaded` 摘掉，Chef 会跳过它。那一次没出事，因为他的两个 Chef mod 在 MDL3 里都加载失败了。

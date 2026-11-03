@@ -15,7 +15,7 @@
 -- of the Lua resources in the game's patch files (the way Chef does), finds the addons made for Chef (the ones that take
 -- their helpers from the chunk's argument, or ask for Chef in a header line) and takes them off package.loaded (and off
 -- the loader's own list, when it has one), so that Chef starts them properly. The mods made for Rat's Shared Loader (which
--- Chef runs as a boot script) lose require's placeholder that MDL3's failed start of them left there, so that Rat starts them.
+-- Chef runs as a boot script) lose what MDL3's start of them left in package.loaded, so that Rat starts them.
 --
 -- And one more, found with Chef 1.5 (and true of 1.4 as well): the callbacks the game has (init, update, render, shutdown: MDL3's
 -- and its mods' chains) are kept by Chef when it is handed the game, and it runs them itself after its own, as "a boot script's".
@@ -383,22 +383,25 @@ local function release_chef_addons()
   if #freed_m > 0 then log('marked as not running in the loader\'s modules table: %s', table.concat(freed_m, ' ')) end
   log('made for Chef: %s', #names > 0 and table.concat(names, ' ') or '(none)')
   log('taken off package.loaded, so that Chef starts them: %s', #freed > 0 and table.concat(freed, ' ') or '(none were on it)')
-  -- Mods made for Rat's Shared Loader (HD2 Transmog ...): MDL3 starts them too, with no Rat, and when that fails require's own
-  -- placeholder stays in package.loaded. Chef runs Rat's Shared Loader as one of its boot scripts after the hand-off, and
-  -- that loader skips a mod with any entry there as started elsewhere (the run of 0.2.4 with Transmog 1.1.2: "elsewhere: Chef
-  -- Shared Loader"). So the placeholder is taken off; a value a mod left after it really ran under MDL3 stays.
+  -- Mods made for Rat's Shared Loader (HD2 Transmog ...): MDL3 starts them too, with no Rat, and leaves an entry in
+  -- package.loaded: require's own placeholder when the mod failed, or Rat's "not started" mark (a table with a shared_loader
+  -- field) that the HD2 Lua Runtime's core returns when it finds no Rat. Chef runs Rat's Shared Loader as one of its boot
+  -- scripts after the hand-off, and that loader starts its mods with require: a placeholder made it skip the mod as started
+  -- elsewhere (0.2.4 with Transmog 1.1.2), and the mark came straight back from require, so the runtime never ran under it and
+  -- Transmog found no `hd2rt` (the first build of 0.2.5). Both are taken off; a value a mod left after it really ran stays.
   local rat_names, cleared = {}, {}
   for name in pairs(scanned.rats) do rat_names[#rat_names + 1] = name end
   if #rat_names > 0 then
     table.sort(rat_names)
     for _, name in ipairs(rat_names) do
-      if type(loaded[name]) == 'userdata' then
+      local v = loaded[name]
+      if type(v) == 'userdata' or (type(v) == 'table' and rawget(v, 'shared_loader') ~= nil) then
         loaded[name] = nil
         cleared[#cleared + 1] = name
       end
     end
-    log('made for Rat\'s Shared Loader: %s; require\'s placeholder (MDL3 tried it and it failed) taken off, so that it starts them: %s',
-      table.concat(rat_names, ' '), #cleared > 0 and table.concat(cleared, ' ') or '(none had one)')
+    log('made for Rat\'s Shared Loader: %s; what MDL3\'s start of them left (require\'s placeholder, Rat\'s "not started" mark) '
+      .. 'taken off, so that it starts them: %s', table.concat(rat_names, ' '), #cleared > 0 and table.concat(cleared, ' ') or '(none had one)')
   end
 end
 

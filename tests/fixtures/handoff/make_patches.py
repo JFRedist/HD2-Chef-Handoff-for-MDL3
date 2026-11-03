@@ -3,8 +3,8 @@
   patch_0  a Chef addon like Treasure Radar: `local chef = ...`, no HD2-Requires line
   patch_1  a Chef addon with the HD2-Requires line (and no `local chef = ...` near the top), an MDL3 addon (no chef at all),
            an addon that only talks about chef in comments, and the hand-off addon itself (handoff/chef_handoff.lua);
-           (0.2.5) two addons made for Rat's Shared Loader (`-- @loader rat` among their first comment lines), and one with
-           that line later on (not marked)
+           (0.2.5) three addons made for Rat's Shared Loader (`-- @loader rat` among their first comment lines; one like
+           the HD2 Lua Runtime's core), and one with that line later on (not marked)
   patch_2  not a patch file (the layout of one, a Lua entry that is a Chef addon, but not the patch magic)
   patch_3  a patch whose Lua entry is bigger than 4 MB (never read)
   patch_4  a Chef addon whose `local chef = ...` is in the first 16 KB but after a long comment
@@ -34,6 +34,7 @@ write(1, [('mods/test/probe_like', b"-- HD2-Addon: mods/test/probe_like\n-- HD2-
           ('mods/test/mdl3_like', b"-- HD2-Addon: mods/test/mdl3_like\nlocal sr = rawget(_G, 'stingray')\nlocal loader = rawget(_G, 'CowboyBingusModLoader')\nreturn {}\n"),
           ('mods/test/comment_mention', b"-- HD2-Addon: mods/test/comment_mention\n-- Chef addons start with `local chef = ...` and ask for -- HD2-Requires: chef-shared-loader\n--   local chef = ...\nlocal x = 1\nreturn {}\n"),
           ('mods/jfredist/chef_handoff', own),          # the hand-off addon itself must never count as made for Chef
+          ('mods/test/rat_core', b"-- HD2-Addon: mods/test/rat_core\n-- @loader rat\n-- @name HD2 Lua Runtime\nreturn {shared_loader = 'needs Rat'}\n"),
           ('mods/test/rat_mod', b"-- HD2-Addon: mods/test/rat_mod\n-- @loader rat\n-- @requires mods/hd2rt/core\nlocal rt = require('hd2rt')\nreturn {}\n"),
           ('mods/test/rat_ran', b"-- HD2-Addon: mods/test/rat_ran\n-- @after mods/hd2rt/core\n-- @loader rat\nreturn {}\n"),
           ('mods/test/late_mark', b"-- HD2-Addon: mods/test/late_mark\nlocal x = 1\n-- @loader rat\nreturn {}\n")])

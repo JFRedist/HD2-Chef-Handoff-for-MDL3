@@ -36,9 +36,10 @@
 
 ### 0.2.5 — 2026-11-03
 - **Rat's Shared Loader 的 mod 不再被跳过。** 0.2.4 + Rat 1.0.1 + HD2 Transmog 1.1.2 的真机运行里，交接后 Chef 把 Rat 当 boot 脚本拉起来了，但 Rat 跳过了 Transmog 和它的通知模块（`elsewhere: Chef Shared Loader`）：MDL3 先“启动”它们失败，`require` 在 `package.loaded` 里留下了占位，Rat 把它当作别人已经启动过。
-  0.2.5 读补丁时认出头几行注释里带 `-- @loader rat` 的 mod，交接前把它们的失败占位拿掉（真在 MDL3 下跑起来的不动）。Rat 要放在 MDL3 下面，不要放最高。
+  0.2.5 读补丁时认出头几行注释里带 `-- @loader rat` 的 mod，交接前把 MDL3 那次启动在 `package.loaded` 里留下的东西拿掉：失败的占位，和运行库没找到 Rat 时返回的“未启动”标记（真在 MDL3 下跑起来、留下别的值的不动）。Rat 要放在 MDL3 下面，不要放最高。
+  第一版 0.2.5 只拿掉失败的占位，真机上 Transmog 还是没运行：运行库的标记留在 `package.loaded` 里，Rat 的 `require` 直接把它还回来，运行库的代码没运行，Transmog 找不到 `hd2rt`。没有发布过，这一版补上了。
 - **补丁文件超过 400 个时也读完。** 0.2.4 及以前扫描最多读到 `patch_400`（[issue #2](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/2) 的日志：529 个补丁文件只读了 400 个）。现在读到连续 8 个号码都不存在为止，0.5 秒的预算不变。issue #2 本身（需要 Data Hub 的 MDL3 mod 不运行）是 MDL3 dev.33 只看前 512 个补丁文件造成的，不是本 mod 能修的。
-- 测试：自写 130 项（400 号以后的补丁、Rat 的 mod 的失败占位）；模拟器 86 项（加真实的 HUDdle 90 项），Chef 1.4.1 和 1.5.1 上都全过。用作者游戏里真实的补丁文件试过：认出 Transmog、通知模块和运行库是 Rat 的，拿掉前两个的占位。
+- 测试：自写 131 项（400 号以后的补丁、Rat 的 mod 留下的占位和标记）；模拟器 86 项（加真实的 HUDdle 90 项），Chef 1.4.1 和 1.5.1 上都全过。用作者游戏里真实的补丁文件试过：认出 Transmog、通知模块和运行库是 Rat 的，三个留下的东西都拿掉。
 - 真机：还没跑过。
 
 ### 0.2.4 — 2026-11-02

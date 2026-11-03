@@ -57,7 +57,7 @@ It works when [i]chef_handoff.log[/i] says [i]Chef Shared Loader 1.x.x started[/
 
 [size=4][b]Version 0.2.5[/b][/size]
 Works with Rat's Shared Loader below MDL3: Chef starts it after the hand-off, and it starts HD2 Transmog (with 0.2.4 it skipped Transmog). Every Chef mod is found with more than 400 patch files. Since 0.2.4 it recognises Chef mods whose "local chef = ..." line comes after their first 16 KB (NarrowHUD 1.0.6); since 0.2.3 it works with Chef 1.4.x and 1.5.x: MDL3's callbacks are kept away from Chef's hang watchdog, which would otherwise switch MDL3 off after one call over 3 seconds.
-Tested in the game with MDL3 3.0.0-dev.29 and dev.33, Chef 1.4.1 and 1.5.1, HUDdle 0.6.11, NarrowHUD 2.2.0, Treasure Radar 0.7.1n and BF5 Hit and Kill Feedback (MDL3 build) 2.0.1.
+Tested in the game with MDL3 3.0.0-dev.29 and dev.33, Chef 1.4.1 and 1.5.1, HUDdle 0.6.11, NarrowHUD 2.2.0, Treasure Radar 0.7.1n, BF5 Hit and Kill Feedback (MDL3 build) 2.0.1, and Rat's Shared Loader 1.0.1 with HD2 Transmog 1.1.2.
 
 [size=4][b]Credits[/b][/size]
 [list]
@@ -103,7 +103,7 @@ Mod manager zip (Arsenal / HD2 Mod Manager). Needs MDL3 and Chef Shared Loader 1
 0.2.5：
 
 ```
-Works with Rat's Shared Loader below MDL3: Chef starts it after the hand-off, and it now starts HD2 Transmog (with 0.2.4, what MDL3's own start of these mods left in package.loaded made Rat skip them, or never run the runtime). Reads every patch file when there are more than 400 (0.2.4 stopped at patch_400). Not yet tested in the game.
+Works with Rat's Shared Loader below MDL3: Chef starts it after the hand-off, and it now starts HD2 Transmog (with 0.2.4, what MDL3's own start of these mods left in package.loaded made Rat skip them, or never run the runtime). Reads every patch file when there are more than 400 (0.2.4 stopped at patch_400). Tested in the game with MDL3 3.0.0-dev.33, Chef 1.5.1, Rat 1.0.1 and HD2 Transmog 1.1.2.
 ```
 
 0.2.4：

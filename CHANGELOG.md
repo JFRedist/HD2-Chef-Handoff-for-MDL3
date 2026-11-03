@@ -40,7 +40,7 @@
   第一版 0.2.5 只拿掉失败的占位，真机上 Transmog 还是没运行：运行库的标记留在 `package.loaded` 里，Rat 的 `require` 直接把它还回来，运行库的代码没运行，Transmog 找不到 `hd2rt`。第二版再拿掉标记，还是不行：MDL3 还在 `package.preload` 里给这些 mod 挂了自己的加载函数，把当初的结果原样交回（Transmog 的报错里带着 MDL3 开机时那次的调用栈）。现在的 0.2.5 把它们在 `package.preload` 里的加载函数也拿掉，日志写出它们定义在哪里。这几版都没有发布过。
 - **补丁文件超过 400 个时也读完。** 0.2.4 及以前扫描最多读到 `patch_400`（[issue #2](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/2) 的日志：529 个补丁文件只读了 400 个）。现在读到连续 8 个号码都不存在为止，0.5 秒的预算不变。issue #2 本身（需要 Data Hub 的 MDL3 mod 不运行）是 MDL3 dev.33 只看前 512 个补丁文件造成的，不是本 mod 能修的。
 - 测试：自写 134 项（400 号以后的补丁、Rat 的 mod 留下的占位、标记和 `package.preload` 里的加载函数）；模拟器 86 项（加真实的 HUDdle 90 项），Chef 1.4.1 和 1.5.1 上都全过。用作者游戏里真实的补丁文件试过：认出 Transmog、通知模块和运行库是 Rat 的，三个留下的东西都拿掉。
-- 真机：还没跑过。
+- 真机（MDL3 3.0.0-dev.33，Chef 1.5.1，Rat 1.0.1，HD2 Transmog 1.1.2）：作者说 Transmog 起来了。Rat 的运行库、通知模块、Transmog 都是 `running`，错误 0；拿掉的三个 `package.preload` 加载函数都定义在 `MDL3/boot:1`；Chef 没有判卡死，退出 `shutdown (clean)`。400 号以后的补丁在作者的安装里碰不上（96 个补丁文件）。
 
 ### 0.2.4 — 2026-11-02
 - **认出 `local chef = ...` 在前 16 KB 之后的 Chef mod。** [issue #1](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/1)（FworksHN 查到了原因）：NarrowHUD 1.0.6 的 Lua 开头是 220 KB 的数据表，`local chef = ...` 在那之后，也没有 `HD2-Requires` 头行。0.2.3 只看每个 Lua 的前 16 KB，没认出它，Chef 就当它已经被别的加载器启动而跳过。

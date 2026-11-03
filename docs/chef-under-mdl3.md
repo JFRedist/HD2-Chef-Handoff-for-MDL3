@@ -368,7 +368,7 @@ Data Hub 和 MDL3 在同一个包里，要一起放在最高优先级，所以�
 
 **0.2.5 改了什么**：去掉 400 的上限，一直读到连续 8 个号码都不存在为止；0.5 秒的预算不变（读不完时日志写 `stopped after 0.5 s, at patch_N`）。那份日志里 400 个补丁文件读了 210 毫秒，照这个速度，0.5 秒能读九百多个。
 `tests/test_handoff.lua` 加了一个例子：`patch_7` 到 `patch_449` 是不含 addon 的补丁，`patch_450` 是一个 Chef addon，要被认出、摘掉，日志要数到 449 个补丁文件。0.2.4 在这两项上失败。
-**还没有在真机上验证。** 0.2.5 还改了 Rat's Shared Loader 的事，见下一节。
+作者的安装只有 96 个补丁文件，这一条在真机上还没碰上过。0.2.5 还改了 Rat's Shared Loader 的事，见下一节。
 
 ## Rat's Shared Loader 和 HD2 Transmog（0.2.5，2026-11-03）
 
@@ -398,7 +398,14 @@ Data Hub 和 MDL3 在同一个包里，要一起放在最高优先级，所以�
 `tests/test_handoff.lua` 加了例子（134 项）：失败占位、“未启动”标记和 `package.preload` 里的加载函数被拿掉、真跑过的值留着、`@loader rat` 不在开头注释里的不算。0.2.4 在其中两项上失败。用作者游戏里真实的补丁文件（只读）、照那次 MDL3 留下的样子摆好 `package.loaded`：0.2.5 认出 3 个 Rat 的 mod，三个留下的东西都拿掉。
 
 **还剩下的**（本 mod 改不了）：Chef 的 F9 里这些 mod 写的是 “Run by MDL3 chef_handoff”（被交接时，Chef 把交接方当成运行它们的加载器）；Rat 的回调在 Chef 的卡死看门狗下面（Transmog 某次调用超过 3 秒，Chef 会把 Rat 整个关掉）；Rat 晚 6 秒才起来，加载画面会显示 READY WITH WARNINGS。
-**还没有在真机上验证。**
+
+**真机（现在的 0.2.5，2026-11-03 02:49，MDL3 3.0.0-dev.33，Chef 1.5.1，Rat 1.0.1，Transmog 1.1.2，约 4 分钟）：Transmog 起来了**（作者）。
+
+- `chef_handoff.log`：`their loaders in package.preload taken off ...: mods/hd2rt/core ([function] [MDL3/boot:1]), mods/hd2tm/transmog ([function] [MDL3/boot:1]), mods/native_notification/core ([function] [MDL3/boot:1])`：三个加载函数都是 MDL3 的，和上面的推断一致。
+- `SharedLoader-loader.log`：运行库、Native Notification、Transmog 都是 `running`；`SharedLoader-session.txt` 里这次运行库加载用了 3 毫秒、Transmog 279 毫秒（真的运行了代码），运行库也写了自己的日志（`HD2LuaRuntime-*`）。健康报告里三个错误都是 0。
+- `chef_loader.log`：Transmog 和运行库是 `left to the loader that bundles it`（不再是“交接方没启动它”）；Chef 运行了 Rat 的启动桩；看门狗没有动作，退出 `shutdown (clean)`。
+- Transmog 自己的日志没有错误，认人一直是 `result=matched`。
+- Rat 的启动画面这次是 `closed: time limit`（不是“游戏往下走了”）：它晚 6 秒才起来，这里没有影响。
 
 ## 按键冲突：MDL3 下运行、自己用 F9 的 mod（2026-11-02）
 

@@ -84,7 +84,7 @@ NarrowHUD 1.0.6 本身没有拿到，是用去掉头行的 NarrowHUD 2.2.0 代�
 还剩下的：Chef 的 F9 里它们写 “Run by MDL3 chef_handoff”（实际是 Rat 在运行）；Rat 的回调在 Chef 的卡死看门狗下面；Rat 的加载画面会显示 READY WITH WARNINGS，因为它要求放最高。细节见 [`docs/chef-under-mdl3.md`](../docs/chef-under-mdl3.md) 的“Rat's Shared Loader 和 HD2 Transmog”一节。
 
 **补丁文件超过 400 个时。** 0.2.4 及以前，补丁扫描最多读到 `patch_400`。[issue #2](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/2) 的日志里，那位玩家有 529 个补丁文件，`chef_handoff.log` 只读了 400 个：再往后的 Chef mod，如果 MDL3 “启动”它时没报错（像 Treasure Radar 0.7.1 那样），本 mod 就不会把它从 `package.loaded` 摘掉，Chef 会跳过它。那一次没出事，因为他的两个 Chef mod 在 MDL3 里都加载失败了。
-0.2.5 一直读到连续 8 个号码都不存在为止，仍然最多读 0.5 秒（读不完时日志写 `stopped after 0.5 s, at patch_N`）。别的行为没有变。还没在真机上跑过。
+0.2.5 一直读到连续 8 个号码都不存在为止，仍然最多读 0.5 秒（读不完时日志写 `stopped after 0.5 s, at patch_N`）。别的行为没有变。作者的安装只有 96 个补丁文件，这一条在真机上还没碰上过。
 
 ## 安装
 
@@ -168,7 +168,7 @@ NarrowHUD 1.0.6 本身没有拿到，是用去掉头行的 NarrowHUD 2.2.0 代�
 - 一位玩家（MDL3 3.0.0-dev.33，837 个补丁文件，有日志）：MDL3 只看了 512 个补丁文件，没发现本 mod（当时放在 MDL3 和 Chef 之间），交接没有发生。所以第 4 步改成了最低优先级；改了以后的结果还没有回报。
 - 0.2.4 + MDL3 3.0.0-dev.33（Chef 1.5.1，带 NarrowHUD 2.2.0，有日志）：作者测好了；Chef 启动了 Treasure Radar 0.7.1 和 NarrowHUD 2.2.0，BF5 反馈由 MDL3 启用；`2 addon(s) read past the first 16 KB`（两个 MDL3 的 addon，没认成 Chef 的）；进了一局任务，约 3 分半，退出 `shutdown (clean)`。这次没有装 HUDdle。
 - 0.2.4 + Rat's Shared Loader 1.0.1 + HD2 Transmog 1.1.2（MDL3 3.0.0-dev.33，Chef 1.5.1，有日志）：Chef 把 Rat 拉起来了，Rat 的运行库在跑，但 Transmog 和它的通知模块被 Rat 当作“别人已经启动过”而跳过（原因见上面 0.2.5 一节）。
-- 0.2.5：还没在真机上跑过。
+- 0.2.5（Rat's Shared Loader 1.0.1 + HD2 Transmog 1.1.2，MDL3 3.0.0-dev.33，Chef 1.5.1，有日志）：作者测过：Rat 1.0.1 + HD2 Transmog 1.1.2，MDL3 3.0.0-dev.33，Chef 1.5.1，Transmog 起来了（运行库、通知模块、Transmog 都是 `running`，错误 0；交接 mod 拿掉的三个 `package.preload` 加载函数都定义在 `MDL3/boot:1`；Chef 没有判卡死，退出 `shutdown (clean)`）。之前两个没发布的版本不行，原因见 [`docs/chef-under-mdl3.md`](../docs/chef-under-mdl3.md)。
 
 **模拟器**：在 Chef 自带的模拟器里，用我写的**假 MDL3 启动器**（代替 MDL3 的 boot）测过：启动器在 `init` 里启动 mod / 在 `boot` 里启动 mod（并先用普通 `require` 试一遍 Chef 的 mod）/
 同前但只留下 `package.loaded` / 更新链里有一次 3.6 秒的慢调用 / mod 打开文件时就把自己的 `render`、`shutdown` 放回去 / **MDL3 的沙箱（照 0.2.2 的真机日志做的）加一次慢调用** / 自己已经交接给 Chef。几种情况下 Chef 都按预期运行，假 MDL3 的回调每帧照常被调用，游戏自己的 `init` 没有被重复或跳过；用真实的 HUDdle 0.6.11 也试过，能启动。

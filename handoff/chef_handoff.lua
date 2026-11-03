@@ -14,7 +14,8 @@
 -- can tell (package.loaded has it), so Chef skips it and it never runs. Before the hand-off this addon reads the headers
 -- of the Lua resources in the game's patch files (the way Chef does), finds the addons made for Chef (the ones that take
 -- their helpers from the chunk's argument, or ask for Chef in a header line) and takes them off package.loaded (and off
--- the loader's own list, when it has one), so that Chef starts them properly.
+-- the loader's own list, when it has one), so that Chef starts them properly. The mods made for Rat's Shared Loader (which
+-- Chef runs as a boot script) lose require's placeholder that MDL3's failed start of them left there, so that Rat starts them.
 --
 -- And one more, found with Chef 1.5 (and true of 1.4 as well): the callbacks the game has (init, update, render, shutdown: MDL3's
 -- and its mods' chains) are kept by Chef when it is handed the game, and it runs them itself after its own, as "a boot script's".
@@ -28,7 +29,7 @@
 --
 -- The Chef side is the documented one (Chef Shared Loader by Th3chef, docs/MODDING.md, "For other loaders": "Everything
 -- here is free to copy into your loader as it is"). Nothing of Chef's code is in this file.
-local VERSION = '0.2.4'
+local VERSION = '0.2.5'
 local CORE = 'mods/chef_shared_loader/core_1'    -- Chef's core, a Lua resource without an HD2- header: no loader starts it as a mod
 local DELAY = 6.0                                -- seconds of game time (the frames' dt added up) before the hand-off
 local KEY = '__CHEF_HANDOFF_ADDON'
@@ -236,8 +237,24 @@ local function u64(str, i)
   return lo + hi * 4294967296
 end
 
--- one patch file: fills `made` with the addons made for Chef; returns false when there is no such file
-local function scan_patch(n, made, stats)
+-- A mod made for Rat's Shared Loader: `-- @loader rat` among the comment lines the file starts with, in its first 4096 bytes,
+-- and no other `@loader` line there (the rule Rat's Shared Loader and Chef go by)
+local function rat_mark(src)
+  local head, at, marked = src:sub(1, 4096), 1, false
+  while true do
+    local line, nxt = head:match('^(%-%-[^\n]*)\n()', at)
+    if not line then return marked end
+    if line:find('^%-%- @loader%s') or line == '-- @loader' then
+      if not line:find('^%-%- @loader%s+rat%s*$') then return false end
+      marked = true
+    end
+    at = nxt
+  end
+end
+
+-- one patch file: fills `made` with the addons made for Chef and `rats` with those made for Rat's Shared Loader; returns false
+-- when there is no such file
+local function scan_patch(n, made, stats, rats)
   local f = io.open('data/9ba626afa44a3aa3.patch_' .. n, 'rb')
   if not f then return false end
   local ok, err = pcall(function()
@@ -274,6 +291,7 @@ local function scan_patch(n, made, stats)
                 end
               end
               if chef_mod then made[name] = true end
+              if rat_mark(src) then rats[name] = true end
             end
           end
         end
@@ -285,28 +303,29 @@ local function scan_patch(n, made, stats)
   return true
 end
 
--- every patch file, within a time budget; returns the set of names, and what it saw
+-- every patch file, within a time budget; returns the sets of names (Chef's, Rat's), and what it saw. The numbers are read
+-- until 8 in a row are missing (0.2.4 stopped at patch_400, and a player with 529 patch files had Chef mods above it)
 local function scan_chef_addons()
-  local made, stats = {}, { files = 0, addons = 0, errors = 0, deep = 0 }
-  if type(io) ~= 'table' or type(io.open) ~= 'function' then return made, stats, 'no io.open' end
+  local made, stats, rats = {}, { files = 0, addons = 0, errors = 0, deep = 0 }, {}
+  if type(io) ~= 'table' or type(io.open) ~= 'function' then return made, stats, 'no io.open', rats end
   local t0 = type(os) == 'table' and type(os.clock) == 'function' and os.clock() or 0
-  local misses = 0
-  for n = 0, 400 do
-    if scan_patch(n, made, stats) then misses = 0 else misses = misses + 1 end
-    if misses >= 8 then break end
-    if type(os.clock) == 'function' and os.clock() - t0 > 0.5 then return made, stats, 'stopped after 0.5 s' end
+  local misses, n = 0, 0
+  while misses < 8 do
+    if scan_patch(n, made, stats, rats) then misses = 0 else misses = misses + 1 end
+    if type(os.clock) == 'function' and os.clock() - t0 > 0.5 then return made, stats, 'stopped after 0.5 s, at patch_' .. n, rats end
+    n = n + 1
   end
   stats.ms = type(os.clock) == 'function' and math.floor((os.clock() - t0) * 1000 + 0.5) or 0
-  return made, stats
+  return made, stats, nil, rats
 end
 
 -- The reading of the patch files is done a second before the hand-off, so that the two do not land in one frame.
 local scanned = nil
 local function prepare_scan()
   if scanned then return end
-  local okp, made, stats, note = pcall(scan_chef_addons)
-  if not okp then made, stats, note = {}, { files = 0, addons = 0, errors = 0 }, tostring(made) end
-  scanned = { made = made, stats = stats, note = note }
+  local okp, made, stats, note, rats = pcall(scan_chef_addons)
+  if not okp then made, stats, note, rats = {}, { files = 0, addons = 0, errors = 0 }, tostring(made), {} end
+  scanned = { made = made, stats = stats, note = note, rats = rats or {} }
 end
 
 -- takes the addons made for Chef off package.loaded (they are not running: they were started without Chef)
@@ -364,6 +383,23 @@ local function release_chef_addons()
   if #freed_m > 0 then log('marked as not running in the loader\'s modules table: %s', table.concat(freed_m, ' ')) end
   log('made for Chef: %s', #names > 0 and table.concat(names, ' ') or '(none)')
   log('taken off package.loaded, so that Chef starts them: %s', #freed > 0 and table.concat(freed, ' ') or '(none were on it)')
+  -- Mods made for Rat's Shared Loader (HD2 Transmog ...): MDL3 starts them too, with no Rat, and when that fails require's own
+  -- placeholder stays in package.loaded. Chef runs Rat's Shared Loader as one of its boot scripts after the hand-off, and
+  -- that loader skips a mod with any entry there as started elsewhere (the run of 0.2.4 with Transmog 1.1.2: "elsewhere: Chef
+  -- Shared Loader"). So the placeholder is taken off; a value a mod left after it really ran under MDL3 stays.
+  local rat_names, cleared = {}, {}
+  for name in pairs(scanned.rats) do rat_names[#rat_names + 1] = name end
+  if #rat_names > 0 then
+    table.sort(rat_names)
+    for _, name in ipairs(rat_names) do
+      if type(loaded[name]) == 'userdata' then
+        loaded[name] = nil
+        cleared[#cleared + 1] = name
+      end
+    end
+    log('made for Rat\'s Shared Loader: %s; require\'s placeholder (MDL3 tried it and it failed) taken off, so that it starts them: %s',
+      table.concat(rat_names, ' '), #cleared > 0 and table.concat(cleared, ' ') or '(none had one)')
+  end
 end
 
 -- ---------------------------------------------------------------------------------------------------------------------

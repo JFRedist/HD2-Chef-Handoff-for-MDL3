@@ -2,7 +2,9 @@
 """Writes a few game patch files for tests/test_handoff.lua into <outdir>/data/ (9ba626afa44a3aa3.patch_0 ...):
   patch_0  a Chef addon like Treasure Radar: `local chef = ...`, no HD2-Requires line
   patch_1  a Chef addon with the HD2-Requires line (and no `local chef = ...` near the top), an MDL3 addon (no chef at all),
-           an addon that only talks about chef in comments, and the hand-off addon itself (handoff/chef_handoff.lua)
+           an addon that only talks about chef in comments, and the hand-off addon itself (handoff/chef_handoff.lua);
+           (0.2.5) two addons made for Rat's Shared Loader (`-- @loader rat` among their first comment lines), and one with
+           that line later on (not marked)
   patch_2  not a patch file (the layout of one, a Lua entry that is a Chef addon, but not the patch magic)
   patch_3  a patch whose Lua entry is bigger than 4 MB (never read)
   patch_4  a Chef addon whose `local chef = ...` is in the first 16 KB but after a long comment
@@ -10,6 +12,8 @@
   patch_6  addons over 16 KB (0.2.4, NarrowHUD 1.0.6): a Chef addon with `local chef = ...` after 220 KB of data, one whose
            `local chef = ...` the 16 KB mark cuts in two, and an MDL3 addon whose HD2-Requires line and indented
            `local chef = ...` come after 16 KB (neither counts there)
+  filler.patch, far_chef.patch  (0.2.5) not read by their names: tests/test_handoff.lua serves the first as patch_7 to
+           patch_449 (a patch with Lua but no addon) and the second as patch_450 (a Chef addon), past the old stop at 400
 usage: python3 -I make_patches.py <outdir>   (run from the repository root)"""
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'tools'))
@@ -29,7 +33,10 @@ own = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 
 write(1, [('mods/test/probe_like', b"-- HD2-Addon: mods/test/probe_like\n-- HD2-Requires: chef-shared-loader >= 1.0.0\nlocal c = ...\nreturn {}\n"),
           ('mods/test/mdl3_like', b"-- HD2-Addon: mods/test/mdl3_like\nlocal sr = rawget(_G, 'stingray')\nlocal loader = rawget(_G, 'CowboyBingusModLoader')\nreturn {}\n"),
           ('mods/test/comment_mention', b"-- HD2-Addon: mods/test/comment_mention\n-- Chef addons start with `local chef = ...` and ask for -- HD2-Requires: chef-shared-loader\n--   local chef = ...\nlocal x = 1\nreturn {}\n"),
-          ('mods/jfredist/chef_handoff', own)])         # the hand-off addon itself must never count as made for Chef
+          ('mods/jfredist/chef_handoff', own),          # the hand-off addon itself must never count as made for Chef
+          ('mods/test/rat_mod', b"-- HD2-Addon: mods/test/rat_mod\n-- @loader rat\n-- @requires mods/hd2rt/core\nlocal rt = require('hd2rt')\nreturn {}\n"),
+          ('mods/test/rat_ran', b"-- HD2-Addon: mods/test/rat_ran\n-- @after mods/hd2rt/core\n-- @loader rat\nreturn {}\n"),
+          ('mods/test/late_mark', b"-- HD2-Addon: mods/test/late_mark\nlocal x = 1\n-- @loader rat\nreturn {}\n")])
 import struct
 
 
@@ -61,4 +68,7 @@ assert split.index(b"\nlocal chef") + 8 < 16384 < split.index(b"chef = ...") + 8
 mdl3_big = (b"-- HD2-Addon: mods/test/deep_mdl3\nlocal sr = rawget(_G, 'stingray')\n" + b'-- notes\n' * 3000
             + b"-- HD2-Requires: chef-shared-loader\nlocal function f(...)\n  local chef = ...\nend\nreturn {}\n")
 write(6, [('mods/test/deep_chef', deep), ('mods/test/split_chef', split), ('mods/test/deep_mdl3', mdl3_big)])
+h.write_lua_archive(os.path.join(out, 'filler.patch'), [(h.resource_hash('mods/test/plain_data'), h.lua_resource(b"return {}\n"))])
+h.write_lua_archive(os.path.join(out, 'far_chef.patch'), [(h.resource_hash('mods/test/far_chef'),
+                    h.lua_resource(b"-- HD2-Addon: mods/test/far_chef\nlocal chef = ...\nreturn {}\n"))])
 print('wrote', sorted(os.listdir(out)))

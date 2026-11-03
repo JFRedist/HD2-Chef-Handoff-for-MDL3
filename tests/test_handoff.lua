@@ -58,6 +58,10 @@ local function game(opts)
     if rel then                                     -- the game's patch files: a folder of fixtures, or none
       G.data_first = G.data_first or G.t
       if opts.data == false or not opts.data then return nil, 'no such file' end
+      -- (opts.far: patch_7 up to it are a patch with no addon, and patch_<far> holds a Chef addon)
+      local n = opts.far and tonumber(rel:match('^9ba626afa44a3aa3%.patch_(%d+)$'))
+      if n and n > 6 and n < opts.far then return real_open(opts.data .. '/data/filler.patch', mode) end
+      if n and n == opts.far then return real_open(opts.data .. '/data/far_chef.patch', mode) end
       return real_open(opts.data .. '/data/' .. rel, mode)
     end
     return real_open(path, mode)
@@ -567,10 +571,34 @@ check(at['mods/jfredist/chef_handoff'] == true, 'the hand-off addon itself (whos
 check(at['mods/test/deep_chef'] == nil, 'an addon whose `local chef = ...` comes after 220 KB of data (NarrowHUD 1.0.6) is read to its end and taken off too')
 check(at['mods/test/split_chef'] == nil, 'and one whose `local chef = ...` the 16 KB mark cuts in two')
 check(at['mods/test/deep_mdl3'] == true, 'an MDL3 addon over 16 KB stays: an HD2-Requires line after the first 16 KB, or an indented `local chef = ...`, does not count')
-check(rlog:find('patch files read: 5 (9 addons, 5 made for Chef, 0 read errors)', 1, true), 'the log says what was read: 5 patch files, 9 addons, 5 of them made for Chef')
+check(rlog:find('patch files read: 5 (12 addons, 5 made for Chef, 0 read errors)', 1, true), 'the log says what was read: 5 patch files, 12 addons, 5 of them made for Chef')
 check(rlog:find('; 3 addon(s) read past the first 16 KB', 1, true), 'and how many addons were read past the first 16 KB (3: the two deep Chef ones and the MDL3 one)')
 check(rlog:find('made for Chef: mods/test/deep_chef mods/test/late_chef mods/test/probe_like mods/test/radar_like mods/test/split_chef', 1, true), 'and which')
 check(rlog:find('taken off package.loaded, so that Chef starts them: mods/test/deep_chef mods/test/late_chef mods/test/probe_like mods/test/radar_like mods/test/split_chef', 1, true), 'and which were taken off the list')
+
+G = game{ name = 'far', data = FIX, far = 450, loaded = { ['mods/test/far_chef'] = true, ['mods/test/mdl3_like'] = true } }
+G.frames(8)
+at = G.loaded_at_require or {}
+check(#G.required == 1 and at['mods/test/far_chef'] == nil and at['mods/test/mdl3_like'] == true,
+  'a Chef addon in patch_450 is found and taken off too (0.2.4 stopped at patch_400; a player had 529 patch files)')
+check((read(G.path('chef_handoff.log')) or ''):find('patch files read: 449 (13 addons, 6 made for Chef', 1, true),
+  'and the log counts every patch file up to it (patch_2 and patch_5 are not read as patches)')
+
+print('== mods made for Rat\'s Shared Loader (`-- @loader rat`): require\'s placeholder from MDL3\'s failed start is taken off')
+-- (require leaves a light userdata when a module fails; a full one stands in for it here: both are a 'userdata')
+local ran = { ran = true }
+G = game{ name = 'rat', data = FIX, loaded = { ['mods/test/rat_mod'] = newproxy(true), ['mods/test/rat_ran'] = ran,
+                                              ['mods/test/late_mark'] = newproxy(true), ['mods/test/mdl3_like'] = newproxy(true) } }
+G.frames(8)
+at = G.loaded_at_require or {}
+check(#G.required == 1 and at['mods/test/rat_mod'] == nil,
+  'a Rat mod that failed under MDL3 has its placeholder taken off before the hand-off (Rat skipped HD2 Transmog with it there)')
+check(at['mods/test/rat_ran'] == ran, 'one that really ran under MDL3 keeps its value (no second copy under Rat)')
+check(type(at['mods/test/late_mark']) == 'userdata' and type(at['mods/test/mdl3_like']) == 'userdata',
+  'a placeholder of any other mod stays (`@loader rat` further down the file does not count)')
+local ratlog = read(G.path('chef_handoff.log')) or ''
+check(ratlog:find("made for Rat's Shared Loader: mods/test/rat_mod mods/test/rat_ran; require's placeholder (MDL3 tried it and it failed) taken off, so that it starts them: mods/test/rat_mod", 1, true),
+  'the log says which mods are Rat\'s and whose placeholder came off')
 
 G = game{ name = 'modules', data = FIX, loaded = marked(),
           modules = { ['mods/test/radar_like'] = 'loaded', ['mods/test/probe_like'] = 'loading', ['mods/test/mdl3_like'] = 'loaded',

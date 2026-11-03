@@ -389,19 +389,31 @@ local function release_chef_addons()
   -- scripts after the hand-off, and that loader starts its mods with require: a placeholder made it skip the mod as started
   -- elsewhere (0.2.4 with Transmog 1.1.2), and the mark came straight back from require, so the runtime never ran under it and
   -- Transmog found no `hd2rt` (the first build of 0.2.5). Both are taken off; a value a mod left after it really ran stays.
-  local rat_names, cleared = {}, {}
+  -- MDL3 also puts a loader of its own for each of them in package.preload, which require asks before the game's resources:
+  -- it hands back what MDL3's start gave (the mark, or the mod's error again), so with package.loaded cleared the mods still
+  -- never ran under Rat (the second build: Transmog's error carried MDL3's own traceback, the core "loaded" in a millisecond).
+  -- That loader is taken off too, so that require loads the mod's own resource; the log says where it was defined.
+  local rat_names, cleared, unhooked = {}, {}, {}
   for name in pairs(scanned.rats) do rat_names[#rat_names + 1] = name end
   if #rat_names > 0 then
     table.sort(rat_names)
+    local preload = pk.preload
     for _, name in ipairs(rat_names) do
       local v = loaded[name]
       if type(v) == 'userdata' or (type(v) == 'table' and rawget(v, 'shared_loader') ~= nil) then
         loaded[name] = nil
         cleared[#cleared + 1] = name
       end
+      local p = type(preload) == 'table' and preload[name] or nil
+      if p ~= nil then
+        preload[name] = nil
+        unhooked[#unhooked + 1] = name .. ' (' .. fn_text(p) .. ')'
+      end
     end
     log('made for Rat\'s Shared Loader: %s; what MDL3\'s start of them left (require\'s placeholder, Rat\'s "not started" mark) '
       .. 'taken off, so that it starts them: %s', table.concat(rat_names, ' '), #cleared > 0 and table.concat(cleared, ' ') or '(none had one)')
+    log('their loaders in package.preload taken off, so that require loads their own code: %s',
+      #unhooked > 0 and table.concat(unhooked, ', ') or '(none had one)')
   end
 end
 

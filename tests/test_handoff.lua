@@ -68,7 +68,7 @@ local function game(opts)
   end }
   if opts.io_error then env.io.open = function() error('boom') end end
   env.os.clock = opts.fake_cpu and function() return G.cpu end or os.clock
-  env.package = { loaded = opts.loaded or {} }
+  env.package = { loaded = opts.loaded or {}, preload = opts.preload or {} }
   env.stingray = { Application = { can_get = function(kind, name)
     G.calls[#G.calls + 1] = 'can_get ' .. kind .. ' ' .. name
     if opts.can_get_error then error('boom') end
@@ -587,11 +587,19 @@ check((read(G.path('chef_handoff.log')) or ''):find('patch files read: 449 (14 a
 print('== mods made for Rat\'s Shared Loader (`-- @loader rat`): what MDL3\'s start of them left in package.loaded is taken off')
 -- (require leaves a light userdata when a module fails; a full one stands in for it here: both are a 'userdata')
 local ran = { ran = true }
+local function mdl3_loader() error('the error MDL3 kept from its own start') end    -- (MDL3's loader in package.preload)
+local keep_loader = function() return {} end
 G = game{ name = 'rat', data = FIX, loaded = { ['mods/test/rat_mod'] = newproxy(true), ['mods/test/rat_ran'] = ran,
                                               ['mods/test/rat_core'] = { shared_loader = "the HD2 Lua Runtime addon needs Rat's Shared Loader" },
-                                              ['mods/test/late_mark'] = newproxy(true), ['mods/test/mdl3_like'] = newproxy(true) } }
+                                              ['mods/test/late_mark'] = newproxy(true), ['mods/test/mdl3_like'] = newproxy(true) },
+          preload = { ['mods/test/rat_mod'] = mdl3_loader, ['mods/test/rat_core'] = mdl3_loader, ['mods/test/mdl3_like'] = keep_loader },
+          debug = { getinfo = debug.getinfo } }
 G.frames(8)
 at = G.loaded_at_require or {}
+local pre = G.env.package.preload
+check(pre['mods/test/rat_mod'] == nil and pre['mods/test/rat_core'] == nil,
+  'MDL3\'s loaders for the Rat mods are taken off package.preload too (require asks it first, and it handed back MDL3\'s own outcome)')
+check(pre['mods/test/mdl3_like'] == keep_loader, 'and any other mod\'s entry there stays')
 check(#G.required == 1 and at['mods/test/rat_mod'] == nil,
   'a Rat mod that failed under MDL3 has its placeholder taken off before the hand-off (Rat skipped HD2 Transmog with it there)')
 check(at['mods/test/rat_core'] == nil,
@@ -602,6 +610,9 @@ check(type(at['mods/test/late_mark']) == 'userdata' and type(at['mods/test/mdl3_
 local ratlog = read(G.path('chef_handoff.log')) or ''
 check(ratlog:find("made for Rat's Shared Loader: mods/test/rat_core mods/test/rat_mod mods/test/rat_ran; what MDL3's start of them left (require's placeholder, Rat's \"not started\" mark) taken off, so that it starts them: mods/test/rat_core mods/test/rat_mod", 1, true),
   'the log says which mods are Rat\'s and what came off')
+check(ratlog:find("their loaders in package.preload taken off, so that require loads their own code: mods/test/rat_core (", 1, true)
+  and ratlog:find('mods/test/rat_mod (', 1, true) and ratlog:find('%[tests/test_handoff%.lua:%d+%]'),
+  'and which loaders came off package.preload, with where each was defined')
 
 G = game{ name = 'modules', data = FIX, loaded = marked(),
           modules = { ['mods/test/radar_like'] = 'loaded', ['mods/test/probe_like'] = 'loading', ['mods/test/mdl3_like'] = 'loaded',

@@ -85,7 +85,7 @@ Tested in the game with MDL3 3.0.0-dev.29 and dev.33, Chef 1.4.1 and 1.5.1, HUDd
 
 | 栏 | 内容 |
 |---|---|
-| 文件 | `Chef-Hand-off-for-MDL3-0.2.5.zip`（GitHub 的 Release 页下载；sha256 `f02388ee701eaa03938111689239100a50b48eca8488c206619f45c997716cfc`） |
+| 文件 | `Chef-Hand-off-for-MDL3-0.2.5.zip`（GitHub 的 Release 页下载；sha256 `1663024fa0aa900a67e75e12a15b9e52b11bf241a04e4c79b7393f6cf9844bde`） |
 | 名称 | `Chef Hand-off for MDL3` |
 | 版本 | `0.2.5` |
 | 类型 | Main file |

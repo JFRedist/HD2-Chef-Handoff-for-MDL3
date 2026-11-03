@@ -27,8 +27,19 @@
 - 交接 addon 0.2.3（见下）。`tests/handoff_sim.sh` 加了变体 H（照 0.2.2 真机日志做的 MDL3 沙箱 + 一次慢调用）；`tests/test_handoff.lua` 加了沙箱模型和守着新键的全局表。0.2.2 的发布说明没有发布过，换成 0.2.3 的。
 - 交接 addon 0.2.4（见下）：[issue #1](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/1)。`tests/test_handoff.lua` 加了三个 16 KB 之后的例子（124 项）；`docs/chef-under-mdl3.md` 加了“0.2.4”一节。
 - 主 README 改成简洁的中英双语：真机状态表挪到 `docs/status.md`，仓库结构、测试和发布挪到 `docs/development.md`，BF5 Chef 版研究记录里探针为什么删掉，并进 `docs/chef-feasibility.md` 的开头。
+- Nexus 文案（`docs/nexus-page.md`）也改成简洁版。
+
+### 2026-11-03
+- 交接 addon 0.2.5（见下）：Rat's Shared Loader 和 HD2 Transmog，和 issue #2 的日志里发现的 400 个补丁的上限。`docs/chef-under-mdl3.md` 加了两节，`docs/status.md` 加了两行。
 
 ## Chef Hand-off for MDL3
+
+### 0.2.5 — 2026-11-03
+- **Rat's Shared Loader 的 mod 不再被跳过。** 0.2.4 + Rat 1.0.1 + HD2 Transmog 1.1.2 的真机运行里，交接后 Chef 把 Rat 当 boot 脚本拉起来了，但 Rat 跳过了 Transmog 和它的通知模块（`elsewhere: Chef Shared Loader`）：MDL3 先“启动”它们失败，`require` 在 `package.loaded` 里留下了占位，Rat 把它当作别人已经启动过。
+  0.2.5 读补丁时认出头几行注释里带 `-- @loader rat` 的 mod，交接前把它们的失败占位拿掉（真在 MDL3 下跑起来的不动）。Rat 要放在 MDL3 下面，不要放最高。
+- **补丁文件超过 400 个时也读完。** 0.2.4 及以前扫描最多读到 `patch_400`（[issue #2](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/2) 的日志：529 个补丁文件只读了 400 个）。现在读到连续 8 个号码都不存在为止，0.5 秒的预算不变。issue #2 本身（需要 Data Hub 的 MDL3 mod 不运行）是 MDL3 dev.33 只看前 512 个补丁文件造成的，不是本 mod 能修的。
+- 测试：自写 130 项（400 号以后的补丁、Rat 的 mod 的失败占位）；模拟器 86 项（加真实的 HUDdle 90 项），Chef 1.4.1 和 1.5.1 上都全过。用作者游戏里真实的补丁文件试过：认出 Transmog、通知模块和运行库是 Rat 的，拿掉前两个的占位。
+- 真机：还没跑过。
 
 ### 0.2.4 — 2026-11-02
 - **认出 `local chef = ...` 在前 16 KB 之后的 Chef mod。** [issue #1](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/1)（FworksHN 查到了原因）：NarrowHUD 1.0.6 的 Lua 开头是 220 KB 的数据表，`local chef = ...` 在那之后，也没有 `HD2-Requires` 头行。0.2.3 只看每个 Lua 的前 16 KB，没认出它，Chef 就当它已经被别的加载器启动而跳过。

@@ -1,4 +1,4 @@
-# Chef Hand-off for MDL3 0.2.4
+# Chef Hand-off for MDL3 0.2.5
 
 让 **Chef Shared Loader**（以及只能在它上面运行的 mod，比如 **HUDdle**、**Treasure Radar**）和 **MDL3**（以及 BF5 反馈这类 MDL3 mod）在同一个游戏里一起工作。
 
@@ -77,10 +77,19 @@ Chef 要是没起来（核心报错），回调原样放回去。MDL3 的某次�
 NarrowHUD 1.0.6 本身没有拿到，是用去掉头行的 NarrowHUD 2.2.0 代替的：0.2.3 认不出，0.2.4 认得出。
 **真机（0.2.4 + MDL3 3.0.0-dev.33 + Chef 1.5.1，带 NarrowHUD 2.2.0）：** 作者测好了。Treasure Radar 和 NarrowHUD 2.2.0 由 Chef 启动，BF5 反馈由 MDL3 启用，退出 `shutdown (clean)`；补丁扫描多读了 2 个 MDL3 的 addon，没有把它们认成 Chef 的。
 
+## 0.2.5 比 0.2.4 多了什么：Rat's Shared Loader 的 mod，和补丁文件超过 400 个时
+
+**Rat's Shared Loader（HD2 Transmog 要它）。** Rat 放在 MDL3 下面任意位置（不要放最高：那样 MDL3 会被当作它下面的普通 boot 脚本）。交接以后，Chef 会把 Rat 当作一个 boot 脚本拉起来，Rat 再启动 Transmog 这些标了 `-- @loader rat` 的 mod。
+0.2.4 下 Transmog 没有运行（Chef 的 F9 里是 “Left to MDL3 chef_handoff, not running”）：MDL3 先“启动”它失败，`require` 在 `package.loaded` 里留下一个占位，Rat 把它当作别人已经启动过，就跳过了。0.2.5 在交接前把这些 mod 的失败占位拿掉。真在 MDL3 下跑起来的不动。
+还剩下的：Chef 的 F9 里它们写 “Run by MDL3 chef_handoff”（实际是 Rat 在运行）；Rat 的回调在 Chef 的卡死看门狗下面；Rat 的加载画面会显示 READY WITH WARNINGS，因为它要求放最高。细节见 [`docs/chef-under-mdl3.md`](../docs/chef-under-mdl3.md) 的“Rat's Shared Loader 和 HD2 Transmog”一节。
+
+**补丁文件超过 400 个时。** 0.2.4 及以前，补丁扫描最多读到 `patch_400`。[issue #2](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/2) 的日志里，那位玩家有 529 个补丁文件，`chef_handoff.log` 只读了 400 个：再往后的 Chef mod，如果 MDL3 “启动”它时没报错（像 Treasure Radar 0.7.1 那样），本 mod 就不会把它从 `package.loaded` 摘掉，Chef 会跳过它。那一次没出事，因为他的两个 Chef mod 在 MDL3 里都加载失败了。
+0.2.5 一直读到连续 8 个号码都不存在为止，仍然最多读 0.5 秒（读不完时日志写 `stopped after 0.5 s, at patch_N`）。别的行为没有变。还没在真机上跑过。
+
 ## 安装
 
-1. 你已经有：MDL3 和它的 mod（BF5 反馈）、Chef Shared Loader（1.2.0 以上；真机上测过 1.4.1 和 1.5.1；**请用 0.2.4**，Chef 1.4.x 和 1.5.x 都是）、HUDdle 等 Chef 的 mod。
-2. 把 `dist/Chef-Hand-off-for-MDL3-0.2.4.zip` 加进 Arsenal / HD2 Mod Manager 并启用。
+1. 你已经有：MDL3 和它的 mod（BF5 反馈）、Chef Shared Loader（1.2.0 以上；真机上测过 1.4.1 和 1.5.1；**请用 0.2.5**，Chef 1.4.x 和 1.5.x 都是）、HUDdle 等 Chef 的 mod。
+2. 把 `dist/Chef-Hand-off-for-MDL3-0.2.5.zip` 加进 Arsenal / HD2 Mod Manager 并启用。
 3. **优先级：MDL3 的优先级要比 Chef 高**（说的是优先级，不是"先加载"：优先级高的那个启动器，游戏才会运行它）。其余 mod 的顺序没关系（本 mod 见下一步）。
    Chef 和 HUDdle 的说明都要求 Chef 的优先级最高，这里正相反：游戏运行的 boot 必须是 MDL3 的。
    在 Arsenal 里怎么摆，看它的设置：
@@ -98,7 +107,7 @@ NarrowHUD 1.0.6 本身没有拿到，是用去掉头行的 NarrowHUD 2.2.0 代�
 | 看哪里 | 成功的样子 |
 |---|---|
 | `%APPDATA%\Arrowhead\Helldivers2\chef_handoff.log` | 有 `the game's global table: getfenv(0) ...`（MDL3 下）和 `Chef Shared Loader 1.x.x started`；稍后还有一行 `the game's update chain ran 600 times in the first 600 frames after the hand-off: once a frame` |
-| `chef_loader.log`（同一个文件夹） | 有 `started by MDL3 chef_handoff 0.2.4, which handed off to me`，没有 `running the callbacks ... set before it started me`，和 `started mods/rosensterner/minimal_hud`、`started mods/chef/treasure_radar`（有 Treasure Radar 的话） |
+| `chef_loader.log`（同一个文件夹） | 有 `started by MDL3 chef_handoff 0.2.5, which handed off to me`，没有 `running the callbacks ... set before it started me`，和 `started mods/rosensterner/minimal_hud`、`started mods/chef/treasure_radar`（有 Treasure Radar 的话） |
 | `chef_handoff.log` 的中段 | 真机上是这样的：`patch files read: 91 (4 addons, 2 made for Chef, 0 read errors) in 5 ms`、`made for Chef: mods/chef/treasure_radar mods/rosensterner/minimal_hud`、`taken off package.loaded, so that Chef starts them: mods/chef/treasure_radar`。HUDdle 不在最后一行里是正常的：它在 MDL3 里加载就失败了，本来就不在 `package.loaded` 里。0.2.4 起第一行后面可能多一段 `; 2 addon(s) read past the first 16 KB` |
 | 游戏里 | 任务中出现 HUDdle 的 HUD；按 F9 出 Chef 的菜单；BF5 反馈照常 |
 
@@ -158,10 +167,12 @@ NarrowHUD 1.0.6 本身没有拿到，是用去掉头行的 NarrowHUD 2.2.0 代�
 - 0.2.3 + **MDL3 3.0.0-dev.33**（Chef 1.5.1，有日志）：作者说 HUDdle、Treasure Radar、BF5 反馈都正常；日志和 dev.29 下一样（游戏的全局表 `getfenv(0)`，没有元表；Chef 没有收下 MDL3 的回调；`once a frame`；退出 `shutdown (clean)`）。更新到 dev.33 后的第一次启动里本 mod 没有运行，原因没找到，下一次起正常。
 - 一位玩家（MDL3 3.0.0-dev.33，837 个补丁文件，有日志）：MDL3 只看了 512 个补丁文件，没发现本 mod（当时放在 MDL3 和 Chef 之间），交接没有发生。所以第 4 步改成了最低优先级；改了以后的结果还没有回报。
 - 0.2.4 + MDL3 3.0.0-dev.33（Chef 1.5.1，带 NarrowHUD 2.2.0，有日志）：作者测好了；Chef 启动了 Treasure Radar 0.7.1 和 NarrowHUD 2.2.0，BF5 反馈由 MDL3 启用；`2 addon(s) read past the first 16 KB`（两个 MDL3 的 addon，没认成 Chef 的）；进了一局任务，约 3 分半，退出 `shutdown (clean)`。这次没有装 HUDdle。
+- 0.2.4 + Rat's Shared Loader 1.0.1 + HD2 Transmog 1.1.2（MDL3 3.0.0-dev.33，Chef 1.5.1，有日志）：Chef 把 Rat 拉起来了，Rat 的运行库在跑，但 Transmog 和它的通知模块被 Rat 当作“别人已经启动过”而跳过（原因见上面 0.2.5 一节）。
+- 0.2.5：还没在真机上跑过。
 
 **模拟器**：在 Chef 自带的模拟器里，用我写的**假 MDL3 启动器**（代替 MDL3 的 boot）测过：启动器在 `init` 里启动 mod / 在 `boot` 里启动 mod（并先用普通 `require` 试一遍 Chef 的 mod）/
 同前但只留下 `package.loaded` / 更新链里有一次 3.6 秒的慢调用 / mod 打开文件时就把自己的 `render`、`shutdown` 放回去 / **MDL3 的沙箱（照 0.2.2 的真机日志做的）加一次慢调用** / 自己已经交接给 Chef。几种情况下 Chef 都按预期运行，假 MDL3 的回调每帧照常被调用，游戏自己的 `init` 没有被重复或跳过；用真实的 HUDdle 0.6.11 也试过，能启动。
-Chef 1.4.1 和 1.5.1 上都是这样（0.2.3 和 0.2.4）。另外试了对方自己用调试钩子的三种情况（每帧设置并还原 / 设置了不还原 / 清除），Chef 1.5.1 上也都没有出问题。
+Chef 1.4.1 和 1.5.1 上都是这样（0.2.3、0.2.4 和 0.2.5）。另外试了对方自己用调试钩子的三种情况（每帧设置并还原 / 设置了不还原 / 清除），Chef 1.5.1 上也都没有出问题。
 假启动器只是照真机日志和 BF5 的 MDL3 版代码推出来的样子，不是真的 MDL3；沙箱那一个和 0.2.2 的真机日志逐行对得上，但 MDL3 的沙箱可能还有日志没显示出来的地方。
 
 在 MDL3 3.0.0-dev.29 和 3.0.0-dev.33（都是 "protected preview"）上测过；MDL3 以后怎么启动 mod 如果变了，上面"出问题时"的文件能看出来。

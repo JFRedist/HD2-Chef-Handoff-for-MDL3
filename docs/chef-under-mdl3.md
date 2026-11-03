@@ -111,7 +111,7 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 
 **怎么认**（`handoff/chef_handoff.lua` 的 `scan_patch` / `scan_chef_addons`）：
 
-1. 直接读游戏的补丁文件 `data/9ba626afa44a3aa3.patch_0`、`_1` ……（Chef 自己也这样读它们）。连续 8 个号码都不存在就停，最多到 400 号，总共最多读 0.5 秒。
+1. 直接读游戏的补丁文件 `data/9ba626afa44a3aa3.patch_0`、`_1` ……（Chef 自己也这样读它们）。连续 8 个号码都不存在就停，总共最多读 0.5 秒。（0.2.4 及以前最多读到 400 号，见“0.2.5”一节。）
 2. 每个补丁：开头 4 字节要是 `0xF0000011`；类型数 ≤ 64、条目数 ≤ 4096（再大的是游戏自己的数据，不是 mod 的补丁，跳过）。
 3. 条目表（72 字节头、32 字节类型行、80 字节条目）里只看 Lua 类型（类型 id `a14e8dfa2cd117e2`）、长度大于 16 字节且小于 4 MB 的资源，每个先读前 16 KB。（BF5 反馈的 Lua 有 6 MB，所以不读。）
 4. 这段源码要以 **`-- HD2-Addon: mods/<作者>/<名字>` 头开头**，才算 addon。
@@ -355,6 +355,45 @@ HUDdle 只用了大约 50 个 `chef.*` 函数（画矩形/三角/弧/文字、�
 
 **没有在真机上验证的**：NarrowHUD 1.0.6 本身（没有拿到；2.2.0 有 `HD2-Requires` 头行，0.2.3 也认得出），也就是“读完全文才认出”这条路在真机上只走过“没认出”的那一半（两个 MDL3 的 addon）。认出的那一半在自写测试和去掉头行的 2.2.0 上验证过。
 
+## 0.2.5：补丁文件超过 400 个（issue #2 的日志，2026-11-03）
+
+[GitHub issue #2](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/2)（MDL3 3.0.0-dev.33，Chef 1.5.1，0.2.4）：一个 MDL3 的击杀反馈（`mods/codex/cod20_kill_feedback`，“MW2019 & 2023 击杀反馈”，需要 MDL3 和 HD2 Data Hub 0.3）没有运行，别的 MDL3 mod 正常。他传了 `chef_handoff.log` 和 `chef_loader.log`，没有 `MDL.log`。
+
+**那个击杀反馈为什么不运行：MDL3 的 512 个补丁文件。** 他有 529 个补丁文件（`chef_loader.log`：`in 529 patch files`），MDL3 的 boot 在 `patch_527`，MDL3 自带的 HD2 Data Hub 在 `patch_528`，都在 512 之后（见“MDL3 dev.33 只看了 512 个补丁文件”）。
+所以 MDL3 没有启动 Data Hub：`chef_handoff.log` 里 `HD2Data = nil`，MDL3 的 `modules` 表里没有 `hd2_data_hub`（17 个条目），最后是 Chef 启动了它（`started mods/codex/hd2_data_hub (9ba626afa44a3aa3.patch_528 ...)`）。那个击杀反馈也不在 `modules` 表里，多半也在 512 之后；它的 Lua 有 28.7 MB，Chef 不读超过 4 MB 的 Lua，它本来也要 MDL3。
+Data Hub 和 MDL3 在同一个包里，要一起放在最高优先级，所以补丁文件一多于 512，依赖 Data Hub 的 MDL3 mod（BF5 反馈也是）都会不运行。这要 MDL3 修；本 mod 修不了。玩家能做的是让补丁文件不超过 512 个。
+
+**顺带发现的本 mod 的问题：只读到 `patch_400`。** 同一份 `chef_handoff.log`：`patch files read: 400 (1 addons, 0 made for Chef, 0 read errors) in 210 ms`。扫描的循环写死了 `for n = 0, 400`，所以 401 号以后的补丁都没读，他在 442 和 486 的 HUDdle、Treasure Radar 没被看到。
+那一次没出事：两个在 MDL3 里都加载失败了（`load failed (managed)`），本来就不在 `package.loaded` 里，Chef 照样启动了它们。但如果 401 号以后有一个 MDL3 “启动”时不报错的 Chef mod（像 Treasure Radar 0.7.1），本 mod 不会把它摘掉，Chef 就会跳过它。
+
+**0.2.5 改了什么**：去掉 400 的上限，一直读到连续 8 个号码都不存在为止；0.5 秒的预算不变（读不完时日志写 `stopped after 0.5 s, at patch_N`）。那份日志里 400 个补丁文件读了 210 毫秒，照这个速度，0.5 秒能读九百多个。
+`tests/test_handoff.lua` 加了一个例子：`patch_7` 到 `patch_449` 是不含 addon 的补丁，`patch_450` 是一个 Chef addon，要被认出、摘掉，日志要数到 449 个补丁文件。0.2.4 在这两项上失败。
+**还没有在真机上验证。** 0.2.5 还改了 Rat's Shared Loader 的事，见下一节。
+
+## Rat's Shared Loader 和 HD2 Transmog（0.2.5，2026-11-03）
+
+[Rat's Shared Loader](https://www.nexusmods.com/helldivers2/mods/18234) 1.0.1 是第三个要当 boot 的加载器；HD2 Transmog Foundation 1.1.2（Nexus 16633，连同它的 Cache 和 Style Library）只能在它下面运行，用它带的 HD2 Lua Runtime（`mods/hd2rt/core`）。读了两个包里的 Lua（只读）和 Chef 1.5.1 的源码：
+
+- **Rat 只启动自己标了的 mod**：头几行注释里有 `-- @loader rat` 的（Transmog、Native Notification、运行库自己），别的都留给别的加载器。它也要求放在最高优先级。
+- **Rat 在最上面时**，它把下面的 boot 当客人运行：Chef 用 Chef 的交接办法启动；Chef 起来后，普通的 boot 脚本交给 Chef 去跑。MDL3 的 boot 会是其中一个普通 boot 脚本，放在 Chef 的看门狗下面（0.2.3 修的那件事），MDL3 自己也要求最高。所以**不建议** Rat 放最高。
+- **Rat 不在最上面时**，谁运行它的启动桩，它就在谁下面启动：只启动自己标了的 mod，不带客人，日志写一条“请把 Rat 放到最高优先级”。Chef 1.5.1 专门支持这样：它把 Rat 的启动桩当普通 boot 脚本运行（`starter.rat_stub`），被交接时也一样（`boot_one` 不看交接）。
+- 所以在 MDL3 → 本 mod → Chef 的装法里，Rat 放在 MDL3 下面就行：交接后 Chef 把 Rat 拉起来，Rat 启动 Transmog。
+
+**真机（0.2.4，MDL3 3.0.0-dev.33，Chef 1.5.1，Rat 1.0.1，Transmog 1.1.2）：Transmog 没有运行。** Chef 的 F9 里它是 “Left to MDL3 chef_handoff, not running”。
+
+- Rat 确实起来了（`SharedLoader-loader.log`：`the boot the game runs is not ours: MDL3 ... runs this loader as one of its boot scripts`；Chef：`running another mod's boot script too ...: patch_95 (Rat's Shared Loader)`），运行库 `running`，加载画面也正常出现、关掉。
+- 但 Transmog 和 Native Notification 都是 `elsewhere: Chef Shared Loader`：Rat 启动它们时，`package.loaded` 里已经有东西，Rat 就当别的加载器已经启动过。
+- 那是 MDL3 留下的：MDL3 也“启动”了它们，都失败了（`MDL.log`：Transmog `module 'hd2rt' not found`，Native Notification `require('ffi') is not available`）。Lua 5.1 的 `require` 先在 `package.loaded` 里放一个占位（light userdata），模块出错时不拿掉。Chef 看到这个占位，记成交接方“试过、没起来”（`left to MDL3 chef_handoff, which didn't start it`）；Rat 的检查（`elsewhere`）只放过空的和它自己的标记表，占位也算“别人启动过”。
+- 运行库不受影响：没有 Rat 时它不报错，返回 `{shared_loader = ...}` 这个 Rat 认得的标记，所以 Rat 照样启动了它。
+
+**0.2.5 改了什么**：读补丁时多认一种头，`-- @loader rat`（规则和 Rat、Chef 一样：文件开头那几行注释里，前 4096 字节，`@loader` 行都是 `rat`）。交接前，这些 mod 在 `package.loaded` 里如果只是 `require` 的占位（userdata），就拿掉；真在 MDL3 下跑起来、留下了值的不动，免得 Rat 再启动一份。日志多一行 `made for Rat's Shared Loader: ...; require's placeholder (MDL3 tried it and it failed) taken off, so that it starts them: ...`。
+照 Chef 和 Rat 的代码，拿掉以后：Chef 把 Transmog 当作“留给捆着运行库的那个加载器”，自己不启动；接着运行 Rat 的启动桩，Rat 看到 `package.loaded` 里没有它，就启动它。
+
+`tests/test_handoff.lua` 加了例子（130 项）：失败占位被拿掉、真跑过的值留着、`@loader rat` 不在开头注释里的不算。0.2.4 在其中两项上失败。用作者游戏里真实的补丁文件（只读）、照那次 MDL3 留下的样子摆好 `package.loaded`：0.2.5 认出 3 个 Rat 的 mod，拿掉 Transmog 和 Native Notification 的占位，运行库的标记表留着。
+
+**还剩下的**（本 mod 改不了）：Chef 的 F9 里这些 mod 写的是 “Run by MDL3 chef_handoff”（被交接时，Chef 把交接方当成运行它们的加载器）；Rat 的回调在 Chef 的卡死看门狗下面（Transmog 某次调用超过 3 秒，Chef 会把 Rat 整个关掉）；Rat 晚 6 秒才起来，加载画面会显示 READY WITH WARNINGS。
+**还没有在真机上验证。**
+
 ## 按键冲突：MDL3 下运行、自己用 F9 的 mod（2026-11-02）
 
 作者装了 **First Person Camera by Webbox**（Nexus 17827，Lua 里是 `First Person Camera 1.0.190-release`，资源 `mods/webbox/first_person_prototype`）之后，看到两件事：
@@ -398,6 +437,7 @@ Chef 的那一行：`package.loaded` 里有它，Chef 就不再启动它（`star
 - **别的 MDL3 版本。** 在 MDL3 3.0.0-dev.29 和 3.0.0-dev.33（都是 "protected preview"）上测过。MDL3 以后怎么启动 addon、给 addon 什么全局，可能会变；`chef_handoff.log` 开头列出的全局表能看出变化。
 - **MDL3 dev.33 的 512 个补丁文件**：是不是固定上限，按什么顺序数；那位玩家把本 mod 改到最低优先级以后能不能用。见“MDL3 dev.33 只看了 512 个补丁文件”。
 - **更新到 dev.33 后第一次启动时本 mod 为什么没运行。** 见“第七次真机结果”。
+- **0.2.5 在真机上**：400 号以后的补丁、Rat's Shared Loader 和 Transmog。见上面两节。
 - **别的 Chef mod。** 真机上只有 HUDdle 0.6.11 和 Treasure Radar 0.7.1n。其它 Chef mod 只在模拟器里用替身测过。
 - **更长的运行。** 我手上带交接的真机日志里，最长一次约 12 分钟（一局任务，0.1.0）；0.2.3 只有一次约 1 分 45 秒的。
 - **真实的 MDL3 为什么会有超过 3 秒的调用**（评论里 1.5.1 判卡死的原因）：没有 0.2.0 + 1.5.x 的日志。0.2.1 那次 Chef 没有判卡死，`chef_handoff.log` 也没有记到超过 0.5 秒的调用。

@@ -407,6 +407,33 @@ Data Hub 和 MDL3 在同一个包里，要一起放在最高优先级，所以�
 - Transmog 自己的日志没有错误，认人一直是 `result=matched`。
 - Rat 的启动画面这次是 `closed: time limit`（不是“游戏往下走了”）：它晚 6 秒才起来，这里没有影响。
 
+## MDL3 3.0.0-dev.43、Chef 1.5.3 和 issue #4（0.2.6，2026-11-07）
+
+[issue #4](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/4)（Chef 1.5.3，MDL3 3.0.0-dev.43 + HD2 Data Hub 0.6.0，Arsenal 0.37.2，105 个条目，顺序 Chef → 本 mod → MDL3）：装好后第一次启动正常，Chef 和 MDL3 一起工作；之后每次启动都只有 MDL3，`chef_handoff.log` 写着 `the last launch ended during the hand-off (chef_handoff_state.txt says "attempt 0.2.5")`。删掉状态文件，下一次又正常，再下一次又不行。附的日志是第二次启动的（到 6 秒那一行为止），第一次的日志被它清空了。
+
+**两个新版本查了什么：**
+
+- **Chef 1.5.3**（和 1.5.1 比）：和交接有关的改动有三处，都不影响本 mod。字符串的 find / match / gmatch / gsub 加了 2048 字节的模式长度上限，改在所有字符串共用的元表上，整个 Lua 状态都受影响，本 mod 的模式都很短；别的加载器可以在自己的环境里托管 Chef 的核心；别的加载器的 `modules` 表里写着 `disabled...`（MDL3 写 `disabled by user`）的 mod，Chef 留给那个加载器，不启动。Chef 没有改游戏全局里的 `io`、`os`，也没有给全局表加元表。用真实的 1.5.3 在 Chef 的模拟器里跑 `tests/handoff_sim.sh`：0.2.5 和 0.2.6 都是 86 项全过，状态文件是 `ok`。
+- **MDL3 3.0.0-dev.43**（看的是它的启动脚本）：addon 的沙箱和 dev.29 起看到的一样（addon 的 `update`、`shutdown` 由 MDL3 收下、每帧调用；沙箱里的 `rawget`、`rawset`、`require` 是 MDL3 自己的）。沙箱里的 `require` 只替 addon 加载它自己的模块，别的（Chef 的核心）交给游戏真正的 `require`，所以 Chef 的核心照旧在游戏的全局环境里加载。MDL3 不改 `io`、`os`。addon 的 update 没有计时的看门狗，连续报错 5 次 MDL3 就关掉那个 addon。沙箱里的 `rawset(_G, ...)` 写到游戏的全局表上，MDL3 停用这个 addon 时再删掉。
+- **HD2 Data Hub 0.6.0**：没有 Chef 或 Rat 的标记，本 mod 不动它。
+
+**作者的真机（0.2.5，MDL3 3.0.0-dev.43 + Data Hub 0.6.0，Chef 1.5.3，2026-11-07）：正常。** `chef_handoff.log`：`patch files read: 91 (5 addons, 2 made for Chef, 0 read errors) in 11 ms`，摘掉 Treasure Radar，`the game's global table: getfenv(0)`，`debug hook before: none`，`Chef Shared Loader 1.5.3 started (api 1)`，`once a frame`；状态文件 `ok 0.2.5`。
+
+**那位玩家那里为什么停在 `attempt`：没查到。** 0.2.5 的顺序是：写 `attempt` → 摘回调 → `require` → 记几行日志 → 放回回调 → 写 `ok`。那几次 MDL3 都在工作，说明回调放回去了，所以多半是最后写 `ok` 时文件没打开（`io.open` 失败，0.2.5 不检查也不重试），比如刚写过的文件正被别的程序（杀毒软件之类）占着。这是推测：出事那次的日志已经被下一次清空了。
+
+**0.2.6 改了什么：**
+
+- `require` 一返回就先写 `ok` / `failed`，再读回来核对；没写进去，就在后面的帧里每 30 帧再写一次，最多 20 次。之后的每一步都有保护，出了错回调也照样放回去。（0.2.5 在 `require` 之后、放回回调之前要是出错，MDL3 的回调就回不到游戏的全局表上了：测试里让“拿掉便条”那一步出错，复现过。）
+- `attempt` 带上时间，`require` 返回后的第一行日志带着同一个时间：`back from require (attempt 2026-11-07T00:47:51): Chef Shared Loader 1.5.3 started (api 1)`。
+- 每次启动先把上一次的日志另存为 `chef_handoff.previous.log`。状态写着 `attempt`、上一次的日志里又有那次的 `back from require`：那次启动过了交接，只是标记没写进去，这次照常交接。真在交接里崩了的，日志停在交接前，照旧不再试。旧版本留下的 `attempt`（比如 `attempt 0.2.5`）再试一次。
+- “已经有一份”的标记改放在游戏的全局表上（用那张表自己的 `rawset`），不再放在 addon 的 `_G` 上：MDL3 重新启动本 mod 时，新的一份能看到旧的。旧的一份还在等交接，就由新的接手；已经交接过，新的什么也不做，日志也不再被清空。
+- 没有 `os` 库时补丁扫描也能跑（0.2.5 在 `os.clock` 那里出错，退回内置的名单）。
+- 载入时 Chef 已经在运行（Chef 在最上面，或者别的加载器先交接了），就不读上一次的日志：不会有交接，而这一份可能是 Chef 当作自己的 mod 启动的，Chef 只让 mod 读它自己写的日志（Chef 1.4.1 的模拟器里会记一行 `blocked`）。真机上 Chef 一直跳过本 mod（`already started by another loader`），这只在模拟器里出现过。
+
+`tests/test_handoff.lua` 加了这些情况（159 项）：状态写入失败一次 / 一直失败、下一次启动读上一次的日志、别的时间的 `attempt`、旧版本的 `attempt`、MDL3 重新启动本 mod（交接前、交接后）、`require` 之后马上出错、没有 `os`。0.2.5 在其中 19 项上失败。
+
+**真机（0.2.6，MDL3 3.0.0-dev.43 + Data Hub 0.6.0，Chef 1.5.3，2026-11-07，作者）：** 0.2.6 连续启动两次，每次都交接成功，状态文件都是 `ok 0.2.6`；第二次启动时，第一次的日志留成了 `chef_handoff.previous.log`（日志里 `back from require (attempt 2026-11-07T00:54:25): Chef Shared Loader 1.5.3 started`）。第一次进了一局任务，约 23 分钟，Chef 退出 `shutdown (clean)`。
+
 ## 按键冲突：MDL3 下运行、自己用 F9 的 mod（2026-11-02）
 
 作者装了 **First Person Camera by Webbox**（Nexus 17827，Lua 里是 `First Person Camera 1.0.190-release`，资源 `mods/webbox/first_person_prototype`）之后，看到两件事：
@@ -447,7 +474,8 @@ Chef 的那一行：`package.loaded` 里有它，Chef 就不再启动它（`star
 - **看门狗真的碰上 MDL3 的慢调用时**：真机上没有出现过超过 3 秒的调用；0.2.3 下 MDL3 的更新已经不在看门狗下面（第六次真机结果），模拟器里慢调用没事。
 - **MDL3 里分类全是“未知”**：出现过一次，下一次就正常了；没有做过不启用交接的对照。见“第四次”“第五次真机结果”。
 - **ESC 闪退的原因。** 见上。
-- **别的 MDL3 版本。** 在 MDL3 3.0.0-dev.29 和 3.0.0-dev.33（都是 "protected preview"）上测过。MDL3 以后怎么启动 addon、给 addon 什么全局，可能会变；`chef_handoff.log` 开头列出的全局表能看出变化。
+- **issue #4 那位玩家那里 `ok` 为什么没写进去**，以及 0.2.6 在他那里好不好。见“MDL3 3.0.0-dev.43、Chef 1.5.3 和 issue #4”。0.2.6 会把写入失败的原因记进日志。
+- **别的 MDL3 版本。** 在 MDL3 3.0.0-dev.29、3.0.0-dev.33 和 3.0.0-dev.43（都是 "protected preview"）上测过。MDL3 以后怎么启动 addon、给 addon 什么全局，可能会变；`chef_handoff.log` 开头列出的全局表能看出变化。
 - **MDL3 dev.33 的 512 个补丁文件**：是不是固定上限，按什么顺序数；那位玩家把本 mod 改到最低优先级以后能不能用。见“MDL3 dev.33 只看了 512 个补丁文件”。
 - **更新到 dev.33 后第一次启动时本 mod 为什么没运行。** 见“第七次真机结果”。
 - **0.2.5 在真机上**：400 号以后的补丁、Rat's Shared Loader 和 Transmog。见上面两节。

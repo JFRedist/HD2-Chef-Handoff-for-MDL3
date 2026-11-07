@@ -32,7 +32,17 @@
 ### 2026-11-03
 - 交接 addon 0.2.5（见下）：Rat's Shared Loader 和 HD2 Transmog，和 issue #2 的日志里发现的 400 个补丁的上限。`docs/chef-under-mdl3.md` 加了两节，`docs/status.md` 加了两行。
 
+### 2026-11-07
+- 交接 addon 0.2.6（见下）：[issue #4](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/4)。查了 Chef Shared Loader 1.5.3、MDL3 3.0.0-dev.43 和 HD2 Data Hub 0.6.0 的适配：交接照旧，Chef 1.5.3 在模拟器里 86 项全过，作者的真机（0.2.5）正常。`docs/chef-under-mdl3.md` 加了一节，`docs/status.md` 加了两行，`tests/test_handoff.lua` 到 159 项，模拟器在 Chef 1.4.1、1.5.1 和 1.5.3 上都跑过。作者在真机上测了 0.2.6（MDL3 dev.43 + Chef 1.5.3，连续启动两次，状态都是 `ok 0.2.6`）。
+- 贡献者里加上 Hynpothalamus（issue #4）。
+
 ## Chef Hand-off for MDL3
+
+### 0.2.6 — 2026-11-07
+- **交接成功后，状态文件不会再停在 `attempt`**（[issue #4](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/4)）。一位玩家（Chef 1.5.3，MDL3 3.0.0-dev.43）每次交接成功后，`chef_handoff_state.txt` 都停在 `attempt 0.2.5`，下一次启动就当作“上次在交接中崩溃”，不再交接。0.2.5 要等回调放回去、日志写完才写 `ok`，写失败了也不知道。现在 `require` 一返回就写 `ok` / `failed` 并读回核对，没写进去就在后面的帧里再写（每 30 帧一次，最多 20 次）；之后的每一步都有保护，出错时回调也照样放回去（0.2.5 在这里出错，MDL3 的回调就回不去了）。
+- **上一次启动的日志留作 `chef_handoff.previous.log`。** `attempt` 带上时间，`require` 返回后的第一行日志带着同一个时间（`back from require (attempt ...)`）；状态写着 `attempt`、而上一次的日志里有那一行的，照常交接。旧版本留下的 `attempt` 再试一次。
+- 判断“已经有一份”的标记放在游戏的全局表上：MDL3 重新启动本 mod 时，还在等交接的旧一份由新的接手，已经交接过的新一份什么也不做，日志不再被清空。载入时 Chef 已经在运行，就不读上一次的日志。
+- 没有 `os` 库时补丁扫描也能跑；交接时扫描出错的退路里补上了 Rat 的那一项。
 
 ### 0.2.5 — 2026-11-03
 - **Rat's Shared Loader 的 mod 不再被跳过。** 0.2.4 + Rat 1.0.1 + HD2 Transmog 1.1.2 的真机运行里，交接后 Chef 把 Rat 当 boot 脚本拉起来了，但 Rat 跳过了 Transmog 和它的通知模块（`elsewhere: Chef Shared Loader`）：MDL3 先“启动”它们失败，`require` 在 `package.loaded` 里留下了占位，Rat 把它当作别人已经启动过。

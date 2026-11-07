@@ -1,4 +1,4 @@
-# Chef Hand-off for MDL3 0.2.5
+# Chef Hand-off for MDL3 0.2.6
 
 让 **Chef Shared Loader**（以及只能在它上面运行的 mod，比如 **HUDdle**、**Treasure Radar**）和 **MDL3**（以及 BF5 反馈这类 MDL3 mod）在同一个游戏里一起工作。
 
@@ -86,10 +86,23 @@ NarrowHUD 1.0.6 本身没有拿到，是用去掉头行的 NarrowHUD 2.2.0 代�
 **补丁文件超过 400 个时。** 0.2.4 及以前，补丁扫描最多读到 `patch_400`。[issue #2](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/2) 的日志里，那位玩家有 529 个补丁文件，`chef_handoff.log` 只读了 400 个：再往后的 Chef mod，如果 MDL3 “启动”它时没报错（像 Treasure Radar 0.7.1 那样），本 mod 就不会把它从 `package.loaded` 摘掉，Chef 会跳过它。那一次没出事，因为他的两个 Chef mod 在 MDL3 里都加载失败了。
 0.2.5 一直读到连续 8 个号码都不存在为止，仍然最多读 0.5 秒（读不完时日志写 `stopped after 0.5 s, at patch_N`）。别的行为没有变。作者的安装只有 96 个补丁文件，这一条在真机上还没碰上过。
 
+## 0.2.6 比 0.2.5 多了什么：状态文件不再停在 `attempt`
+
+[issue #4](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/4)：一位玩家（Chef 1.5.3，MDL3 3.0.0-dev.43 + HD2 Data Hub 0.6.0，105 个条目）每次交接成功后，`chef_handoff_state.txt` 都停在 `attempt 0.2.5`。下一次启动就当作“上次在交接中崩溃”，不再交接，每次都得先删掉这个文件。
+0.2.5 要等回调放回去、几行日志写完才写 `ok`，这中间任何一步出错或者写文件失败，标记就一直是 `attempt`。日志每次启动都清空，出事那一次的记录被下一次覆盖了，所以那位玩家那里具体是哪一步，没有查到。不过那几次 MDL3 都正常工作，说明回调已经放回去了（0.2.5 先放回调、后写 `ok`）：最可能的是写 `ok` 时文件没打开（比如刚写过的文件正被别的程序占着），而 0.2.5 不检查、也不重试。这是推测。作者用同样的版本（dev.43 + 1.5.3 + Data Hub 0.6.0）跑，状态是 `ok`。
+
+0.2.6：
+
+- `require` 一返回就先写 `ok` / `failed`，再读回来核对；没写进去，就在后面的帧里每 30 帧再写一次，最多 20 次（日志写 `could not be written`、`written on a later frame`）。之后的每一步都有保护，出了错回调也照样放回去：0.2.5 在这里出错时，MDL3 的回调就回不到游戏的全局表上了（测试里复现过）。
+- 写 `attempt` 时带上时间（`attempt 0.2.6 2026-11-07T00:47:51`），`require` 返回后的第一行日志带着同一个时间（`back from require (attempt 2026-11-07T00:47:51): Chef Shared Loader 1.5.3 started`）。
+- 每次启动先把上一次的日志另存为 `chef_handoff.previous.log`，再开新的。状态写着 `attempt`，而上一次的日志里有那次的 `back from require`：那次启动过了交接，只是标记没写进去，这次照常交接。真在交接里崩了的，日志停在交接前，照旧不再试。旧版本留下的 `attempt`（比如 `attempt 0.2.5`）会再试一次。
+- 本 mod 被加载器再启动一份时（重新加载），判断“已经有一份”的标记放在游戏的全局表上：第一份还在等交接，就由新的一份接手；已经交接过，新的一份什么也不做。日志不再被第二份清空。
+- 没有 `os` 库时补丁扫描也能跑（0.2.5 在那里会出错，退回内置的名单）。
+
 ## 安装
 
-1. 你已经有：MDL3 和它的 mod（BF5 反馈）、Chef Shared Loader（1.2.0 以上；真机上测过 1.4.1 和 1.5.1；**请用 0.2.5**，Chef 1.4.x 和 1.5.x 都是）、HUDdle 等 Chef 的 mod。
-2. 把 `dist/Chef-Hand-off-for-MDL3-0.2.5.zip` 加进 Arsenal / HD2 Mod Manager 并启用。
+1. 你已经有：MDL3 和它的 mod（BF5 反馈）、Chef Shared Loader（1.2.0 以上；真机上测过 1.4.1、1.5.1 和 1.5.3；**请用 0.2.6**，Chef 1.4.x 和 1.5.x 都是）、HUDdle 等 Chef 的 mod。
+2. 把 `dist/Chef-Hand-off-for-MDL3-0.2.6.zip` 加进 Arsenal / HD2 Mod Manager 并启用。
 3. **优先级：MDL3 的优先级要比 Chef 高**（说的是优先级，不是"先加载"：优先级高的那个启动器，游戏才会运行它）。其余 mod 的顺序没关系（本 mod 见下一步）。
    Chef 和 HUDdle 的说明都要求 Chef 的优先级最高，这里正相反：游戏运行的 boot 必须是 MDL3 的。
    在 Arsenal 里怎么摆，看它的设置：
@@ -106,8 +119,9 @@ NarrowHUD 1.0.6 本身没有拿到，是用去掉头行的 NarrowHUD 2.2.0 代�
 
 | 看哪里 | 成功的样子 |
 |---|---|
-| `%APPDATA%\Arrowhead\Helldivers2\chef_handoff.log` | 有 `the game's global table: getfenv(0) ...`（MDL3 下）和 `Chef Shared Loader 1.x.x started`；稍后还有一行 `the game's update chain ran 600 times in the first 600 frames after the hand-off: once a frame` |
-| `chef_loader.log`（同一个文件夹） | 有 `started by MDL3 chef_handoff 0.2.5, which handed off to me`，没有 `running the callbacks ... set before it started me`，和 `started mods/rosensterner/minimal_hud`、`started mods/chef/treasure_radar`（有 Treasure Radar 的话） |
+| `%APPDATA%\Arrowhead\Helldivers2\chef_handoff.log` | 有 `the game's global table: getfenv(0) ...`（MDL3 下）和 `back from require (attempt ...): Chef Shared Loader 1.x.x started`；稍后还有一行 `the game's update chain ran 600 times in the first 600 frames after the hand-off: once a frame` |
+| `chef_loader.log`（同一个文件夹） | 有 `started by MDL3 chef_handoff 0.2.6, which handed off to me`，没有 `running the callbacks ... set before it started me`，和 `started mods/rosensterner/minimal_hud`、`started mods/chef/treasure_radar`（有 Treasure Radar 的话） |
+| `chef_handoff_state.txt`（同一个文件夹） | `ok 0.2.6` |
 | `chef_handoff.log` 的中段 | 真机上是这样的：`patch files read: 91 (4 addons, 2 made for Chef, 0 read errors) in 5 ms`、`made for Chef: mods/chef/treasure_radar mods/rosensterner/minimal_hud`、`taken off package.loaded, so that Chef starts them: mods/chef/treasure_radar`。HUDdle 不在最后一行里是正常的：它在 MDL3 里加载就失败了，本来就不在 `package.loaded` 里。0.2.4 起第一行后面可能多一段 `; 2 addon(s) read past the first 16 KB` |
 | 游戏里 | 任务中出现 HUDdle 的 HUD；按 F9 出 Chef 的菜单；BF5 反馈照常 |
 
@@ -127,15 +141,18 @@ NarrowHUD 1.0.6 本身没有拿到，是用去掉头行的 NarrowHUD 2.2.0 代�
 | `chef_handoff.log` 里 | 意思 |
 |---|---|
 | 文件不存在 | MDL3 没有运行，或者没有启动这个 mod：多半是 Chef 的优先级更高（上一节），也可能这个 mod 没有启用或没有部署，或者 mod 太多、它排得太靠后（`MDL.log` 开头 `in 512 archive(s)`，上一节）。`MDL.log` 里有 `mods/jfredist/chef_handoff: enabled` 却还是没有这个文件的，作者遇到过一次（更新到 MDL3 dev.33 后的第一次启动），原因没找到，再启动一次就好了 |
-| `Chef Shared Loader ... started` | 成功 |
+| `back from require (attempt ...): Chef Shared Loader ... started` | 成功 |
 | `Chef Shared Loader is not installed` | 游戏里找不到 Chef 的核心：Chef 没装、没部署，或者被禁用了 |
 | `Chef Shared Loader is running already` | Chef 已经在运行（MDL3 自己交接了，或者 Chef 排在最上面），本 mod 什么也没做 |
-| `the last launch ended during the hand-off` | 上次启动在交接过程中结束（崩溃）。为了不反复崩，这次没有再试。删掉同一文件夹里的 `chef_handoff_state.txt` 可以再试一次 |
+| `the last launch ended during the hand-off` | 上次启动在交接过程中结束（崩溃），上一次的日志（`chef_handoff.previous.log`）也停在交接前。为了不反复崩，这次没有再试。删掉同一文件夹里的 `chef_handoff_state.txt` 可以再试一次；请把 `chef_handoff.previous.log` 一起发上来 |
+| `... says that hand-off came back from require: that launch went on` | 状态写着 `attempt`，但上一次的日志表明那次交接已经返回，只是标记没写进去：这次照常交接 |
+| `... ended during a hand-off by chef_handoff 0.2.5. This is 0.2.6: trying once more` | 旧版本留下的 `attempt`：再试一次。这次也崩在交接里的话，下一次就不再试 |
+| `chef_handoff_state.txt could not be written (...)` | 状态文件没写进去（括号里是原因），后面的帧会再写；之后有 `written on a later frame` 就好了 |
 | `the hand-off did not start Chef (require false: ...)` | Chef 的核心报错，原因在括号里 |
 
 ## 出问题时，需要这些文件
 
-`chef_handoff.log`、`chef_loader.log`，MDL3 的 `MDL.log`，如果有 `chef_handoff_state.txt`，再加一句现象：游戏起不来 / 崩溃 / 进游戏没有 HUDdle / BF5 没反应。
+`chef_handoff.log`、`chef_handoff.previous.log`（上一次启动的日志）、`chef_loader.log`，MDL3 的 `MDL.log`，如果有 `chef_handoff_state.txt`，再加一句现象：游戏起不来 / 崩溃 / 进游戏没有 HUDdle / BF5 没反应。
 `MDL.log` 每次启动都会被覆盖：闪退后先把它拷出来，再重开游戏。
 `chef_handoff.log` 开头会列出 MDL3 给 mod 的那些全局表（`CowboyBingusModLoader`、`MDL3`、`HD2Data` ……）里有什么，MDL3 换了版本之后，这能看出它变了什么。
 交接那几行里的 `debug hook before / after` 是交接前后这个线程上有没有调试钩子（Chef 的看门狗和 MDL3 自己的预算限制都可能用到），`took N ms of CPU time` 是 MDL3 的某次调用花了多久。
@@ -153,11 +170,11 @@ NarrowHUD 1.0.6 本身没有拿到，是用去掉头行的 NarrowHUD 2.2.0 代�
 
 ## 卸载
 
-在 mod 管理器里取消勾选，Purge 再 Deploy。`chef_handoff.log` 和 `chef_handoff_state.txt` 可以直接删。
+在 mod 管理器里取消勾选，Purge 再 Deploy。`chef_handoff.log`、`chef_handoff.previous.log` 和 `chef_handoff_state.txt` 可以直接删。
 
 ## 验证到了哪一步
 
-**真机**（作者的游戏：MDL3 3.0.0-dev.29 和 3.0.0-dev.33，Chef 1.4.1 和 1.5.1，HUDdle 0.6.11，BF5 击杀反馈 MDL3 版 2.0.1，Treasure Radar 0.7.1n）：
+**真机**（作者的游戏：MDL3 3.0.0-dev.29、3.0.0-dev.33 和 3.0.0-dev.43，Chef 1.4.1、1.5.1 和 1.5.3，HUDdle 0.6.11，BF5 击杀反馈 MDL3 版 2.0.1，Treasure Radar 0.7.1n）：
 
 - 0.1.0（有日志）：交接成功；HUDdle 正常，一局约 8 分钟没有错误；正常结算回飞船没问题；BF5 反馈被 MDL3 启用；Treasure Radar 被 Chef 跳过（0.2.0 修的就是这个）；任务中按 ESC 回飞船闪退过一次，没有找到原因，之后没有再出现。
 - 0.2.0（Chef 1.4.1）：作者的试玩报告说 Treasure Radar 起来了，ESC 回飞船没有闪退，BF5 反馈正常（Chef 的日志没传）。`chef_handoff.log` 证实补丁扫描在真机上起作用：读了 91 个补丁文件，认出 Treasure Radar 和 HUDdle 是做给 Chef 的，把 Treasure Radar 从 `package.loaded` 里摘掉，然后 Chef 1.4.1 启动。
@@ -169,13 +186,16 @@ NarrowHUD 1.0.6 本身没有拿到，是用去掉头行的 NarrowHUD 2.2.0 代�
 - 0.2.4 + MDL3 3.0.0-dev.33（Chef 1.5.1，带 NarrowHUD 2.2.0，有日志）：作者测好了；Chef 启动了 Treasure Radar 0.7.1 和 NarrowHUD 2.2.0，BF5 反馈由 MDL3 启用；`2 addon(s) read past the first 16 KB`（两个 MDL3 的 addon，没认成 Chef 的）；进了一局任务，约 3 分半，退出 `shutdown (clean)`。这次没有装 HUDdle。
 - 0.2.4 + Rat's Shared Loader 1.0.1 + HD2 Transmog 1.1.2（MDL3 3.0.0-dev.33，Chef 1.5.1，有日志）：Chef 把 Rat 拉起来了，Rat 的运行库在跑，但 Transmog 和它的通知模块被 Rat 当作“别人已经启动过”而跳过（原因见上面 0.2.5 一节）。
 - 0.2.5（Rat's Shared Loader 1.0.1 + HD2 Transmog 1.1.2，MDL3 3.0.0-dev.33，Chef 1.5.1，有日志）：作者测过：Rat 1.0.1 + HD2 Transmog 1.1.2，MDL3 3.0.0-dev.33，Chef 1.5.1，Transmog 起来了（运行库、通知模块、Transmog 都是 `running`，错误 0；交接 mod 拿掉的三个 `package.preload` 加载函数都定义在 `MDL3/boot:1`；Chef 没有判卡死，退出 `shutdown (clean)`）。之前两个没发布的版本不行，原因见 [`docs/chef-under-mdl3.md`](../docs/chef-under-mdl3.md)。
+- 0.2.5 + **MDL3 3.0.0-dev.43 + HD2 Data Hub 0.6.0 + Chef 1.5.3**（作者的游戏，有日志）：交接正常，`Chef Shared Loader 1.5.3 started`，`once a frame`，状态文件是 `ok 0.2.5`。
+- 0.2.5 + 同样的版本，一位玩家（105 个条目，有日志，[issue #4](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/4)）：交接成功后状态文件停在 `attempt 0.2.5`，之后每次启动都跳过交接。原因没查到（见上面 0.2.6 一节）。
+- **0.2.6** + MDL3 3.0.0-dev.43 + Data Hub 0.6.0 + Chef 1.5.3（作者的游戏，有日志）：0.2.6 连续启动两次，每次都交接成功，状态文件都是 `ok 0.2.6`；第二次启动时，第一次的日志留成了 `chef_handoff.previous.log`（日志里 `back from require (attempt 2026-11-07T00:54:25): Chef Shared Loader 1.5.3 started`）。第一次进了一局任务，约 23 分钟，Chef 退出 `shutdown (clean)`。
 
 **模拟器**：在 Chef 自带的模拟器里，用我写的**假 MDL3 启动器**（代替 MDL3 的 boot）测过：启动器在 `init` 里启动 mod / 在 `boot` 里启动 mod（并先用普通 `require` 试一遍 Chef 的 mod）/
 同前但只留下 `package.loaded` / 更新链里有一次 3.6 秒的慢调用 / mod 打开文件时就把自己的 `render`、`shutdown` 放回去 / **MDL3 的沙箱（照 0.2.2 的真机日志做的）加一次慢调用** / 自己已经交接给 Chef。几种情况下 Chef 都按预期运行，假 MDL3 的回调每帧照常被调用，游戏自己的 `init` 没有被重复或跳过；用真实的 HUDdle 0.6.11 也试过，能启动。
-Chef 1.4.1 和 1.5.1 上都是这样（0.2.3、0.2.4 和 0.2.5）。另外试了对方自己用调试钩子的三种情况（每帧设置并还原 / 设置了不还原 / 清除），Chef 1.5.1 上也都没有出问题。
+Chef 1.4.1 和 1.5.1 上都是这样（0.2.3、0.2.4、0.2.5 和 0.2.6），0.2.5 和 0.2.6 在 Chef 1.5.3 上也是。另外试了对方自己用调试钩子的三种情况（每帧设置并还原 / 设置了不还原 / 清除），Chef 1.5.1 上也都没有出问题。
 假启动器只是照真机日志和 BF5 的 MDL3 版代码推出来的样子，不是真的 MDL3；沙箱那一个和 0.2.2 的真机日志逐行对得上，但 MDL3 的沙箱可能还有日志没显示出来的地方。
 
-在 MDL3 3.0.0-dev.29 和 3.0.0-dev.33（都是 "protected preview"）上测过；MDL3 以后怎么启动 mod 如果变了，上面"出问题时"的文件能看出来。
+在 MDL3 3.0.0-dev.29、3.0.0-dev.33 和 3.0.0-dev.43（都是 "protected preview"）上测过；MDL3 以后怎么启动 mod 如果变了，上面"出问题时"的文件能看出来。
 详细见 [`docs/chef-under-mdl3.md`](../docs/chef-under-mdl3.md)。
 
 ## 许可

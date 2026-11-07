@@ -2,7 +2,7 @@
 
 每个版本在真实游戏里跑出来的结果，和得出结果的依据。每次运行的细节（日志逐行看）在 [`chef-under-mdl3.md`](chef-under-mdl3.md)，版本记录在 [`CHANGELOG.md`](../CHANGELOG.md)。
 
-作者在自己的游戏里测的：MDL3 3.0.0-dev.29 和 3.0.0-dev.33，Chef Shared Loader 1.4.1 和 1.5.1，HUDdle 0.6.11，BF5 击杀反馈 MDL3 版 2.0.1，Treasure Radar 0.7.1n。
+作者在自己的游戏里测的：MDL3 3.0.0-dev.29、3.0.0-dev.33 和 3.0.0-dev.43（带 HD2 Data Hub 0.6.0），Chef Shared Loader 1.4.1、1.5.1 和 1.5.3，HUDdle 0.6.11，BF5 击杀反馈 MDL3 版 2.0.1，Treasure Radar 0.7.1n。
 
 | 项目 | 结果 | 依据 |
 |---|---|---|
@@ -23,6 +23,9 @@
 | mod 很多（一位玩家：837 个补丁文件）+ MDL3 3.0.0-dev.33 | 交接没有发生：MDL3 只看了 512 个补丁文件（`discovery 3 declared entries in 512 archive(s)`），比这靠后的 addon 一个也没发现，本 mod（当时放在 MDL3 和 Chef 之间）也在其中，MDL3 没有启动它。所以现在建议把本 mod 放在最低优先级（见根目录 [README](../README.md) 的安装步骤）。改了以后的结果还没有回报 | 那位玩家的 `MDL.log`，和更早一次（Chef 在最上面）的 `chef_loader.log`；见 [`docs/chef-under-mdl3.md`](chef-under-mdl3.md) |
 | 529 个补丁文件 + MDL3 3.0.0-dev.33：一个需要 Data Hub 的 MDL3 击杀反馈不运行（[issue #2](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/2)） | 不是本 mod 的问题：MDL3 的 boot 在 `patch_527`，它自带的 Data Hub 在 `patch_528`，都在 512 之后，MDL3 没启动 Data Hub（`HD2Data = nil`）。要 MDL3 修，或者让补丁文件不超过 512 个。同一份日志显示本 mod 0.2.4 只读到 `patch_400`（这次没造成问题）；0.2.5 修了；作者的安装只有 96 个补丁文件，真机上还没碰上过 | 那位玩家的 `chef_handoff.log`、`chef_loader.log`；见 [`chef-under-mdl3.md`](chef-under-mdl3.md) 的“0.2.5：补丁文件超过 400 个” |
 | 0.2.4 + Rat's Shared Loader 1.0.1 + HD2 Transmog 1.1.2（MDL3 3.0.0-dev.33，Chef 1.5.1） | Transmog 没有运行（Chef 的 F9：“Left to MDL3 chef_handoff, not running”）。Chef 把 Rat 当 boot 脚本拉起来了，Rat 的运行库在跑，但 Rat 把 MDL3 失败时 `require` 留下的占位当成“别人已经启动过”，跳过了 Transmog 和它的通知模块。第一版 0.2.5（只拿掉失败的占位）也不行：Rat 去启动了，但运行库在 MDL3 那次留下的“未启动”标记被 `require` 直接还回来，代码没运行，Transmog 找不到 `hd2rt`。第二版（再拿掉标记）也不行：MDL3 还在 `package.preload` 里给它们挂了自己的加载函数，把当初的结果原样交回。现在的 0.2.5 把这个也拿掉：作者测过：Rat 1.0.1 + HD2 Transmog 1.1.2，MDL3 3.0.0-dev.33，Chef 1.5.1，Transmog 起来了（运行库、通知模块、Transmog 都是 `running`，错误 0；交接 mod 拿掉的三个 `package.preload` 加载函数都定义在 `MDL3/boot:1`；Chef 没有判卡死，退出 `shutdown (clean)`） | `SharedLoader-loader.log`、`SharedLoader-health.txt`、`chef_loader.log`、`MDL.log`；见 [`chef-under-mdl3.md`](chef-under-mdl3.md) 的“Rat's Shared Loader 和 HD2 Transmog” |
+| 0.2.5 + MDL3 3.0.0-dev.43（带 HD2 Data Hub 0.6.0）+ Chef 1.5.3 | 作者：正常。交接照旧（`getfenv(0)`、`once a frame`），状态文件 `ok 0.2.5` | 2026-11-07 的 `chef_handoff.log`、`chef_handoff_state.txt` |
+| 0.2.6 + MDL3 3.0.0-dev.43（带 HD2 Data Hub 0.6.0）+ Chef 1.5.3 | 作者：连续启动两次都交接成功，状态文件都是 `ok 0.2.6`，第二次留下了第一次的日志（`chef_handoff.previous.log`）；一局任务约 23 分钟，退出 `shutdown (clean)` | 2026-11-07 的 `chef_handoff.log`、`chef_handoff.previous.log`、`chef_handoff_state.txt`、`chef_loader.log` |
+| 0.2.5 + 同样的版本，一位玩家（105 个条目，[issue #4](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/4)） | 第一次交接成功，但状态文件停在 `attempt 0.2.5`，之后每次启动都当作“上次在交接中崩溃”而跳过交接。原因没查到（多半是写 `ok` 时文件没打开）。0.2.6：`require` 一返回就写并核对，没写进去就重写；上一次的日志留作 `chef_handoff.previous.log`，能看出那次过了交接的照常交接 | issue 里的状态文件和第二次启动的日志；见 [`chef-under-mdl3.md`](chef-under-mdl3.md) 的“MDL3 3.0.0-dev.43、Chef 1.5.3 和 issue #4” |
 | MDL3 设置里所有 mod 的分类都是“未知” | 0.2.1 那次出现（名字正常）。那次启动时 MDL3 自己读文件的服务坏了：每个 `sys list`、`sys tree` 都失败（`attempt to index upvalue 'kernel' (a nil value)`），图标也读不出（`'images'` 为 nil），mod 库扫描 80 毫秒就结束。这些都发生在交接之前 6 秒。下一次（0.2.2，同样的安装、同样启用交接）扫描正常：1306 毫秒，没有这种错误，Chef 1.5.1 被认作启动加载器。**所以是时有时无的，看起来是 MDL3 自己的；没有做过不启用交接的对照** | 0.2.1 和 0.2.2 两次的 `MDL.log` |
 
 ESC 那次闪退没有找到原因，0.2.0 也没有做任何针对它的改动，所以只能说"没有再出现"，不能说"修好了"。顺带一个事实：闪退那一次还没有装 BF5 反馈（作者当时说还没试 MDL3 的 mod，Chef 的日志里也没有它），之后的几次都装了（详见 [`docs/chef-under-mdl3.md`](chef-under-mdl3.md)）。

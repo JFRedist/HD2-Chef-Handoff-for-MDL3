@@ -16,8 +16,8 @@ The game runs only one `boot` (the highest-priority one), so normally only one o
 
 1. 已经装好 MDL3、Chef Shared Loader（1.2.0 以上）和要用的 mod。
    You already have MDL3, Chef Shared Loader (1.2.0 or newer) and the mods you want.
-2. 从 [Releases](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/releases) 下载 `Chef-Hand-off-for-MDL3-0.2.5.zip`（[`dist/`](dist/) 里是同一个文件），加进 Arsenal / HD2 Mod Manager 并启用。
-   Download `Chef-Hand-off-for-MDL3-0.2.5.zip` from Releases (the same file is in [`dist/`](dist/)), add it to Arsenal / HD2 Mod Manager and enable it.
+2. 从 [Releases](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/releases) 下载 `Chef-Hand-off-for-MDL3-0.2.6.zip`（[`dist/`](dist/) 里是同一个文件），加进 Arsenal / HD2 Mod Manager 并启用。
+   Download `Chef-Hand-off-for-MDL3-0.2.6.zip` from Releases (the same file is in [`dist/`](dist/)), add it to Arsenal / HD2 Mod Manager and enable it.
 3. **MDL3 的优先级要比 Chef 高**，和 Chef、HUDdle 的说明相反：游戏运行的 boot 必须是 MDL3 的。
    **Give MDL3 a higher priority than Chef**, the opposite of what Chef and HUDdle say: the game has to run MDL3's boot.
 4. **本 mod 放在最低优先级**（最先部署）：MDL3 3.0.0-dev.33 只看了前 512 个补丁文件，mod 多时排在后面的它发现不了。
@@ -34,18 +34,19 @@ Which end of Arsenal's list is "higher priority", how to tell that it worked and
 |---|---|
 | MDL3 的 mod 正常，Chef 的 mod 没有<br>MDL3 mods work, Chef mods do not | 看 `chef_handoff.log`。没有这个文件，而 `MDL.log` 开头写着 `in 512 archive(s)`：本 mod 排得太靠后，放到最低优先级。<br>Read `chef_handoff.log`. If there is none and `MDL.log` begins with `in 512 archive(s)`, this mod is deployed too late: give it the lowest priority. |
 | Chef 的 mod 正常，MDL3 的没有，也没有 `chef_handoff.log`<br>Chef mods work, MDL3 mods do not, and there is no `chef_handoff.log` | Chef 的优先级比 MDL3 高了：对调，Purge 再 Deploy。<br>Chef has the higher priority: swap them, Purge, Deploy. |
+| `chef_handoff.log` 写着 `the last launch ended during the hand-off`<br>`chef_handoff.log` says `the last launch ended during the hand-off` | 上次启动在交接中结束（崩溃），为了不反复崩溃这次没交接。删掉同一文件夹里的 `chef_handoff_state.txt` 再试一次，并把 `chef_handoff.previous.log`（上次的日志）发上来。0.2.5 有时在交接成功后也留下这个标记（[issue #4](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/4)），0.2.6 修了。<br>The last launch ended during the hand-off (a crash), so it was not tried again. Delete `chef_handoff_state.txt` in the same folder to try once more, and send `chef_handoff.previous.log` (the last launch's log). 0.2.5 sometimes left this mark after a hand-off that worked (issue #4); 0.2.6 fixes that. |
 | 按 F9 时两个菜单一起出来<br>F9 opens two menus at once | 某个 mod 由 MDL3 运行，自己用了 F9：把 Chef 的菜单键改到别的键，见 [`handoff/README.md`](handoff/README.md)。<br>A mod run by MDL3 took F9 itself: move Chef's menu key to another key (see [`handoff/README.md`](handoff/README.md)). |
 
-反馈问题请在 [Issues](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues) 里提，附上 `%APPDATA%\Arrowhead\Helldivers2\` 里的 `chef_handoff.log`、`chef_loader.log`，和 `%LOCALAPPDATA%\MDL\Helldivers2\Logs\MDL.log`（每次启动都会被覆盖，闪退后先拷出来）。
-To report a problem, open an [issue](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues) with `chef_handoff.log` and `chef_loader.log` from `%APPDATA%\Arrowhead\Helldivers2\`, and `%LOCALAPPDATA%\MDL\Helldivers2\Logs\MDL.log` (it is overwritten on every launch: copy it out first after a crash).
+反馈问题请在 [Issues](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues) 里提，附上 `%APPDATA%\Arrowhead\Helldivers2\` 里的 `chef_handoff.log`、`chef_handoff.previous.log`、`chef_loader.log`，和 `%LOCALAPPDATA%\MDL\Helldivers2\Logs\MDL.log`（每次启动都会被覆盖，闪退后先拷出来）。
+To report a problem, open an [issue](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues) with `chef_handoff.log`, `chef_handoff.previous.log` and `chef_loader.log` from `%APPDATA%\Arrowhead\Helldivers2\`, and `%LOCALAPPDATA%\MDL\Helldivers2\Logs\MDL.log` (it is overwritten on every launch: copy it out first after a crash).
 
 ## 版本 / Version
 
-**0.2.5**：Rat's Shared Loader 的 mod（HD2 Transmog）不再被它跳过（Rat 放在 MDL3 下面，交接后由 Chef 拉起来）；补丁文件超过 400 个时也能找全 Chef 的 mod（0.2.4 最多读到 `patch_400`）。0.2.4 起认得出 `local chef = ...` 在前 16 KB 之后的 Chef mod（NarrowHUD 1.0.6，[issue #1](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/1)）。0.2.3 起，Chef 1.4.x 和 1.5.x 都能用：MDL3 的回调不交给 Chef 的卡死看门狗。
-真机测过：MDL3 3.0.0-dev.29 和 dev.33，Chef 1.4.1 和 1.5.1，HUDdle 0.6.11，NarrowHUD 2.2.0，Treasure Radar 0.7.1n，BF5 击杀反馈 MDL3 版 2.0.1，Rat's Shared Loader 1.0.1 + HD2 Transmog 1.1.2（0.2.5 在 MDL3 dev.33 + Chef 1.5.1 上）。NarrowHUD 1.0.6 本身没有拿到，只在测试里验证过。
+**0.2.6**：交接成功后，状态文件不会再停在 `attempt`，导致之后每次启动都跳过交接（[issue #4](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/4)）。上一次启动的日志留作 `chef_handoff.previous.log`。0.2.5 起 Rat's Shared Loader 的 mod（HD2 Transmog）不再被跳过（Rat 放在 MDL3 下面），补丁文件超过 400 个时也能找全 Chef 的 mod。0.2.4 起认得出 `local chef = ...` 在前 16 KB 之后的 Chef mod（NarrowHUD 1.0.6，[issue #1](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/1)）。0.2.3 起，Chef 1.4.x 和 1.5.x 都能用：MDL3 的回调不交给 Chef 的卡死看门狗。
+真机测过：MDL3 3.0.0-dev.29、dev.33 和 dev.43（+ HD2 Data Hub 0.6.0），Chef 1.4.1、1.5.1 和 1.5.3，HUDdle 0.6.11，NarrowHUD 2.2.0，Treasure Radar 0.7.1n，BF5 击杀反馈 MDL3 版 2.0.1，Rat's Shared Loader 1.0.1 + HD2 Transmog 1.1.2（0.2.5 在 MDL3 dev.33 + Chef 1.5.1 上）；MDL3 dev.43 + Chef 1.5.3 上测过 0.2.5 和 0.2.6。NarrowHUD 1.0.6 本身没有拿到，只在测试里验证过。
 
-**0.2.5**: Rat's Shared Loader no longer skips its mods (HD2 Transmog) here (keep Rat below MDL3: Chef starts it after the hand-off), and every Chef mod is found when there are more than 400 patch files (0.2.4 read up to `patch_400`). From 0.2.4 on it recognises a Chef mod whose `local chef = ...` comes after its first 16 KB (NarrowHUD 1.0.6, [issue #1](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/1)). From 0.2.3 on it works with Chef 1.4.x and 1.5.x: MDL3's callbacks are kept away from Chef's hang watchdog.
-Tested in the real game with MDL3 3.0.0-dev.29 and dev.33, Chef 1.4.1 and 1.5.1, HUDdle 0.6.11, NarrowHUD 2.2.0, Treasure Radar 0.7.1n and the MDL3 build of BF5 Hit and Kill Feedback 2.0.1, and Rat's Shared Loader 1.0.1 with HD2 Transmog 1.1.2 (0.2.5 with MDL3 dev.33 and Chef 1.5.1). NarrowHUD 1.0.6 itself was only checked in the tests.
+**0.2.6**: after a hand-off that worked, the state file no longer stays at `attempt`, which made every later launch skip the hand-off ([issue #4](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/4)). The last launch's log is kept as `chef_handoff.previous.log`. From 0.2.5 on Rat's Shared Loader no longer skips its mods (HD2 Transmog; keep Rat below MDL3), and every Chef mod is found when there are more than 400 patch files. From 0.2.4 on it recognises a Chef mod whose `local chef = ...` comes after its first 16 KB (NarrowHUD 1.0.6, [issue #1](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/1)). From 0.2.3 on it works with Chef 1.4.x and 1.5.x: MDL3's callbacks are kept away from Chef's hang watchdog.
+Tested in the real game with MDL3 3.0.0-dev.29, dev.33 and dev.43 (with HD2 Data Hub 0.6.0), Chef 1.4.1, 1.5.1 and 1.5.3, HUDdle 0.6.11, NarrowHUD 2.2.0, Treasure Radar 0.7.1n and the MDL3 build of BF5 Hit and Kill Feedback 2.0.1, and Rat's Shared Loader 1.0.1 with HD2 Transmog 1.1.2 (0.2.5 with MDL3 dev.33 and Chef 1.5.1); MDL3 dev.43 with Chef 1.5.3 was tested with 0.2.5 and 0.2.6. NarrowHUD 1.0.6 itself was only checked in the tests.
 
 ## 文档 / Documents
 
@@ -67,6 +68,7 @@ Tested in the real game with MDL3 3.0.0-dev.29 and dev.33, Chef 1.4.1 and 1.5.1,
 |---|---|
 | [JFRedist](https://github.com/JFRedist) | 项目发起和方向；全部真机测试（安装、运行、取日志），发现并报告了 Treasure Radar 不运行、ESC 回飞船闪退、MDL3 里分类全是“未知”等问题。<br>Started and steers the project; did all real-game testing, and found Treasure Radar not running, the crash on ESC back to the ship and MDL3 showing every category as "unknown". |
 | [FworksHN](https://github.com/FworksHN) | [issue #1](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/1)：查出了 NarrowHUD 不运行的原因（16 KB）。<br>Found why NarrowHUD did not run (the 16 KB limit). |
+| [Hynpothalamus](https://github.com/Hynpothalamus) | [issue #4](https://github.com/JFRedist/HD2-Chef-Handoff-for-MDL3/issues/4)：报告了交接成功后状态文件停在 `attempt`，附了日志和复现步骤。<br>Reported the state file left at `attempt` after a hand-off that worked, with logs and steps. |
 | Claude（Anthropic，Claude Code） | 代码、测试、文档 / code, tests, documents |
 
 ## 致谢 / Credits

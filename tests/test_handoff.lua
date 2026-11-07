@@ -39,7 +39,7 @@ local function lines(text) local n = 0; for _ in (text or ''):gmatch('[^\n]+') d
 local function game(opts)
   opts = opts or {}
   local dir = OUT .. '/' .. opts.name
-  fresh(dir, 'A\\Arrowhead\\Helldivers2')
+  if not opts.keep then fresh(dir, 'A\\Arrowhead\\Helldivers2') end    -- (keep: the next launch of the same game folder)
   local base = dir .. '/A'                 -- APPDATA; the folder names are glued on with backslashes, as on Windows: on this
                                            -- machine the files come out as 'A\Arrowhead\Helldivers2\<name>' inside dir
   local G = { calls = {}, updates = 0, last_args = nil, required = {}, t = 0, order = {}, record = false, cpu = 0 }
@@ -64,10 +64,17 @@ local function game(opts)
       if n and n == opts.far then return real_open(opts.data .. '/data/far_chef.patch', mode) end
       return real_open(opts.data .. '/data/' .. rel, mode)
     end
+    -- (state_fail: the state file cannot be opened for writing once Chef's core has loaded: 'once', or 'always')
+    if opts.state_fail and G.core_loaded and mode == 'w' and type(path) == 'string' and path:find('chef_handoff_state.txt', 1, true)
+       and (opts.state_fail == 'always' or not G.state_failed) then
+      G.state_failed = (G.state_failed or 0) + 1
+      return nil, path .. ': Permission denied'
+    end
     return real_open(path, mode)
   end }
   if opts.io_error then env.io.open = function() error('boom') end end
   env.os.clock = opts.fake_cpu and function() return G.cpu end or os.clock
+  if opts.no_os then env.os = nil end
   env.package = { loaded = opts.loaded or {}, preload = opts.preload or {} }
   env.stingray = { Application = { can_get = function(kind, name)
     G.calls[#G.calls + 1] = 'can_get ' .. kind .. ' ' .. name
@@ -82,6 +89,7 @@ local function game(opts)
     G.required_at = G.t
     if opts.require_error then error('core failed: boom') end
     if name == CORE then
+      G.core_loaded = true
       G.note = env.ChefSharedLoaderHandoff
       G.loaded_at_require = {}
       for k, v in pairs(env.package.loaded) do G.loaded_at_require[k] = v end
@@ -146,6 +154,10 @@ local function game(opts)
     local f = io.open(base .. '\\Arrowhead\\Helldivers2\\chef_handoff_state.txt', 'w')
     f:write(opts.mark); f:close()
   end
+  for fname, text in pairs(opts.files or {}) do            -- (files the last launch left in the folder)
+    local f = io.open(base .. '\\Arrowhead\\Helldivers2\\' .. fname, 'w')
+    f:write(text); f:close()
+  end
   local chunk, err = loadfile(ADDON)
   assert(chunk, err)
   setfenv(chunk, env)
@@ -186,33 +198,49 @@ local function sandbox_game(opts)
   local SLOT = { init = true, update = true, shutdown = true }
   local function default_update() end
   local function default_shutdown() G.addon_shutdowns = (G.addon_shutdowns or 0) + 1 end
-  local slots = { update = default_update, shutdown = default_shutdown }
-  local P = {}
-  local get, put
-  local function sb_rawget(t, k) if t == P then return get(k) end return rawget(t, k) end
-  local function sb_rawset(t, k, v) if t == P then put(k, v); return t end return rawset(t, k, v) end
   local fake_gt = opts.gt_without_stingray and {} or GT
-  local function sb_getfenv(x) if x == 0 then return fake_gt end return getfenv(x) end
-  get = function(k)
-    if k == '_G' then return P end
-    if k == 'rawget' then return sb_rawget end
-    if k == 'rawset' then return sb_rawset end
-    if k == 'getfenv' then return sb_getfenv end
-    if SLOT[k] then return slots[k] end
-    return rawget(GT, k)
+  -- one addon's sandbox: its own _G (a proxy), its own update and shutdown (slots), MDL3's rawget, rawset and getfenv
+  local function make_proxy(slots)
+    local P = {}
+    local get, put
+    local function sb_rawget(t, k) if t == P then return get(k) end return rawget(t, k) end
+    local function sb_rawset(t, k, v) if t == P then put(k, v); return t end return rawset(t, k, v) end
+    local function sb_getfenv(x) if x == 0 then return fake_gt end return getfenv(x) end
+    get = function(k)
+      if k == '_G' then return P end
+      if k == 'rawget' then return sb_rawget end
+      if k == 'rawset' then return sb_rawset end
+      if k == 'getfenv' then return sb_getfenv end
+      if SLOT[k] then return slots[k] end
+      return rawget(GT, k)
+    end
+    put = function(k, v)
+      if k == 'update' then slots.update = v or default_update
+      elseif k == 'shutdown' then if v ~= nil then slots.shutdown = v end
+      elseif k == 'init' then slots.init = v
+      else rawset(GT, k, v) end
+    end
+    setmetatable(P, { __index = function(_, k) return get(k) end, __newindex = function(_, k, v) put(k, v) end })
+    return P
   end
-  put = function(k, v)
-    if k == 'update' then slots.update = v or default_update
-    elseif k == 'shutdown' then if v ~= nil then slots.shutdown = v end
-    elseif k == 'init' then slots.init = v
-    else rawset(GT, k, v) end
+  local slots = { update = default_update, shutdown = default_shutdown }
+  local P = make_proxy(slots)
+  -- the addon started again by MDL3, in a sandbox of its own (a reload): MDL3's update calls each copy's update in turn
+  G.copies = {}
+  function G.load_copy()
+    local s = { update = default_update, shutdown = function() end }
+    local chunk = assert(loadfile(ADDON))
+    setfenv(chunk, make_proxy(s))
+    local mod = chunk()
+    G.copies[#G.copies + 1] = s
+    return mod, s
   end
-  setmetatable(P, { __index = function(_, k) return get(k) end, __newindex = function(_, k, v) put(k, v) end })
   GT.update = function(dt)
     G.mdl3_updates = G.mdl3_updates + 1
     G.mdl3_inside_chef = G.mdl3_inside_chef or G.in_chef
     if G.record then G.order[#G.order + 1] = 'mdl3 update' end
     slots.update(dt)
+    for _, s in ipairs(G.copies) do s.update(dt) end
   end
   GT.render = function() if G.record then G.order[#G.order + 1] = 'mdl3 render' end end
   GT.shutdown = function()
@@ -227,10 +255,17 @@ local function sandbox_game(opts)
       if k == 'init' or k == 'update' or k == 'render' or k == 'shutdown' then G.swallowed[k] = v else rawset(t, k, v) end
     end })
   end
+  if opts.note_rawset_error then           -- a rawset on the game's table that raises when the note is taken off after require
+    GT.rawset = function(t, k, v)
+      if k == 'ChefSharedLoaderHandoff' and v == nil and G.core_loaded then error('rawset boom') end
+      return rawset(t, k, v)
+    end
+  end
   GT.require = function(name)
     G.required[#G.required + 1] = name
     if opts.require_error then error('core failed: boom') end
     if name ~= CORE then error('module not found: ' .. tostring(name)) end
+    G.core_loaded = true
     G.note = rawget(GT, 'ChefSharedLoaderHandoff')
     G.chef_saw = {}
     local kept = {}
@@ -398,6 +433,37 @@ check(not slog:find('still on', 1, true) and not slog:find('the one taken off', 
 check(slog:find('the game\'s callbacks after Chef loaded (its global table): init=', 1, true), 'and what was on it after Chef loaded')
 check(slog:find('metatable of _G: __index=', 1, true) and slog:find('metatable of the global table: none', 1, true), 'it describes both tables')
 check(slog:find('ran 600 times in the first 600 frames after the hand-off: once a frame', 1, true), 'the count says once a frame')
+check(rawget(G.GT, '__CHEF_HANDOFF_ADDON') == G.module,
+  'the one-copy mark is on the game\'s own table (MDL3 3.0.0-dev.43 takes off again what an addon put through its rawset when it stops the addon)')
+
+print('== MDL3 starts the addon again, in a sandbox of its own (a reload)')
+G = sandbox_game{ name = 'sandbox_again' }
+G.frames(3)
+local first = G.module
+local second = G.load_copy()
+check(second ~= first and first.state == 'replaced' and second.state == 'waiting',
+  'started again while the first copy still waits for its hand-off: the new copy takes over')
+G.frames(7)
+check(#G.required == 1 and second.state == 'chef started' and first.state == 'replaced', 'there is one hand-off, by the new copy')
+local again_log = read(G.path('chef_handoff.log')) or ''
+check(again_log:find('chef_handoff ' .. VER .. ' loaded; the game', 1, true)
+  and again_log:find('loaded again, in another _G, while the first copy was still waiting for its hand-off', 1, true),
+  'the log keeps the first copy\'s lines and adds the new one\'s (0.2.5 started the log afresh)')
+local third = G.load_copy()
+G.frames(8)
+check(third == second and #G.required == 1, 'started again once the hand-off is done: it hands back the copy that did it, and does nothing')
+check((read(G.path('chef_handoff.log')) or ''):find('the first copy has done its part (chef started), so this one does nothing', 1, true),
+  'and the log says so')
+
+G = sandbox_game{ name = 'sandbox_note_error', note_rawset_error = true }
+G.frames(7)
+check(G.module.state == 'chef started' and (read(G.path('chef_handoff_state.txt')) or ''):sub(1, #VER + 3) == 'ok ' .. VER,
+  'an error right after require (taking the note off the game\'s table) does not leave the mark at "attempt"')
+G.record, G.order = true, {}
+G.GT.update(1 / 60)
+check(table.concat(G.order, ',') == 'chef update,mdl3 update', 'and MDL3\'s callbacks still go back behind Chef\'s (' .. table.concat(G.order, ',') .. ')')
+G.record = false
+check((read(G.path('chef_handoff.log')) or ''):find('taking the note off the game\'s global table failed: ', 1, true), 'the log says what failed')
 
 G = sandbox_game{ name = 'sandbox_fail', require_error = true }
 G.frames(7)
@@ -491,6 +557,9 @@ G = game{ name = 'running', chef_running = true }
 G.frames(8)
 check(#G.required == 0 and G.module.state == 'chef already running', 'nothing is done')
 check((read(G.path('chef_handoff.log')) or ''):find('running already (version 1.3.9)', 1, true), 'and the log names the version that is running')
+G = game{ name = 'running_logs', chef_running = true, files = { ['chef_handoff.log'] = 'the last launch\'s log\n' } }
+check(read(G.path('chef_handoff.previous.log')) == nil and not (read(G.path('chef_handoff.log')) or ''):find('the last launch', 1, true),
+  'with Chef running at load the last log is not read (Chef 1.4.1 blocks that for a copy it started itself), only started afresh')
 
 print('== the last launch ended during a hand-off')
 G = game{ name = 'crashed', mark = 'attempt ' .. VER .. '\n' }
@@ -500,6 +569,47 @@ check((read(G.path('chef_handoff.log')) or ''):find('Delete that file', 1, true)
 G = game{ name = 'crashed_ok', mark = 'ok ' .. VER .. '\n' }
 G.frames(8)
 check(#G.required == 1, 'an "ok" mark from the last launch does not stop it')
+G = game{ name = 'crashed_other', mark = 'attempt ' .. VER .. ' 2026-01-01T00:00:00\n',
+          files = { ['chef_handoff.log'] = '00:00:06    6.0 s | back from require (attempt 2025-12-31T23:59:59): Chef Shared Loader 1.5.3 started (api 1).\n' } }
+G.frames(8)
+check(#G.required == 0 and G.module.state == 'skipped after a crash',
+  'an "attempt" whose time the last launch\'s log does not name as back from require: not tried again')
+G = game{ name = 'crashed_old', mark = 'attempt 0.2.5\n' }
+G.frames(8)
+check(#G.required == 1 and G.module.state == 'chef started', 'an "attempt" left by another version (0.2.5, as in issue #4) gets one more try')
+check((read(G.path('chef_handoff.log')) or ''):find('a hand-off by chef_handoff 0.2.5. This is ' .. VER .. ': trying once more', 1, true),
+  'and the log says so')
+
+print('== the state mark is written as soon as require is back, and again on later frames when it does not land (issue #4)')
+local VERPAT = VER:gsub('%.', '%%.')
+G = game{ name = 'mark_once', state_fail = 'once' }
+G.frames(7)
+check(G.module.state == 'chef started' and G.state_failed == 1, 'the first write of the mark after require fails')
+G.frames(2)
+check((read(G.path('chef_handoff_state.txt')) or ''):sub(1, #VER + 3) == 'ok ' .. VER, 'a later frame writes "ok"')
+local mlog = read(G.path('chef_handoff.log')) or ''
+check(mlog:find('chef_handoff_state.txt could not be written (', 1, true) and mlog:find('Permission denied', 1, true),
+  'the log says that the first write failed, and why')
+check(mlog:find('chef_handoff_state.txt written on a later frame (try 1): ok (Chef is running)', 1, true), 'and that a later frame wrote it')
+
+G = game{ name = 'mark_never', state_fail = 'always' }
+G.frames(7)
+local stuck = read(G.path('chef_handoff_state.txt')) or ''
+local stamp = stuck:match('^attempt ' .. VERPAT .. ' (%d%d%d%d%-%d%d%-%d%dT%d%d:%d%d:%d%d)')
+G.frames(12)
+check(stamp ~= nil and (G.state_failed or 0) >= 20 and G.module.state == 'chef started',
+  'a mark that can never be written after require stays "attempt", with the attempt\'s time (' .. stuck:gsub('%s+$', '') .. ')')
+local nlog = read(G.path('chef_handoff.log')) or ''
+check(nlog:find('back from require (attempt ' .. tostring(stamp) .. '): Chef Shared Loader 1.4.1 started', 1, true),
+  'the log\'s line right after require names the attempt by that time')
+check(nlog:find('could not be written in 20 tries', 1, true), 'after 20 tries the log says so, and the tries stop')
+G = game{ name = 'mark_never', keep = true }               -- the next launch in the same folder, where writes work again
+check((read(G.path('chef_handoff.previous.log')) or '') == nlog, 'the next launch keeps the last one\'s log as chef_handoff.previous.log')
+check(not (read(G.path('chef_handoff.log')) or ''):find('back from require', 1, true), 'and starts its own afresh')
+G.frames(8)
+check(#G.required == 1 and (read(G.path('chef_handoff_state.txt')) or ''):sub(1, #VER + 3) == 'ok ' .. VER,
+  'it finds "attempt" and that line in the last launch\'s log: it hands off, and the mark says ok')
+check((read(G.path('chef_handoff.log')) or ''):find('says that hand-off came back from require: that launch went on', 1, true), 'the log says why')
 
 print('== the core fails to load')
 G = game{ name = 'fails', require_error = true }
@@ -644,6 +754,12 @@ check((read(G.path('chef_handoff.log')) or ''):find('using the built-in list', 1
 G = game{ name = 'ioerror', io_error = true, loaded = { ['mods/chef/treasure_radar'] = true } }
 G.frames(8)
 check(#G.required == 1 and G.module.state == 'chef started', 'file reads that raise errors do not stop the hand-off')
+
+G = game{ name = 'no_os', no_os = true, data = FIX, loaded = { ['mods/test/radar_like'] = true, ['mods/test/mdl3_like'] = true } }
+G.frames(8)
+at = G.loaded_at_require or {}
+check(#G.required == 1 and at['mods/test/radar_like'] == nil and at['mods/test/mdl3_like'] == true,
+  'with no os library the patch files are still read (0.2.5 raised on os.clock there and fell back to the built-in list)')
 
 G = game{ name = 'notinstalled_loaded', data = FIX, chef_installed = false, loaded = marked() }
 G.frames(8)

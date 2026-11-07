@@ -6,8 +6,8 @@
 -- other loaders") says how a loader hands the game to it: set the note `ChefSharedLoaderHandoff` and `require` its core.
 -- This addon does that from MDL3's side, once the game is running (a few seconds in), so both loaders work:
 -- MDL3 keeps the mods made for it, Chef starts the mods made for Chef. It touches nothing else. Without Chef installed
--- it does nothing; if Chef is running already it does nothing. It writes chef_handoff.log (and one tiny state file) in
--- %APPDATA%\Arrowhead\Helldivers2, the folder Chef and MDL3 use.
+-- it does nothing; if Chef is running already it does nothing. It writes chef_handoff.log (the last launch's is kept as
+-- chef_handoff.previous.log) and one tiny state file in %APPDATA%\Arrowhead\Helldivers2, the folder Chef and MDL3 use.
 --
 -- One more thing, found in the first real run: MDL3 starts EVERY addon with an HD2-Addon header, Chef's too, with
 -- nothing to run on. A Chef mod that survives that (Treasure Radar) is then "started by another loader" as far as Chef
@@ -29,20 +29,18 @@
 --
 -- The Chef side is the documented one (Chef Shared Loader by Th3chef, docs/MODDING.md, "For other loaders": "Everything
 -- here is free to copy into your loader as it is"). Nothing of Chef's code is in this file.
-local VERSION = '0.2.5'
+local VERSION = '0.2.6'
 local CORE = 'mods/chef_shared_loader/core_1'    -- Chef's core, a Lua resource without an HD2- header: no loader starts it as a mod
 local DELAY = 6.0                                -- seconds of game time (the frames' dt added up) before the hand-off
 local KEY = '__CHEF_HANDOFF_ADDON'
 local KEYS = { 'init', 'update', 'render', 'shutdown' }   -- the game's callbacks
-
--- one copy per Lua state (a loader that starts addons twice, a reload ...)
-local existing = rawget(_G, KEY)
-if type(existing) == 'table' then return existing end
-local M = { version = VERSION, state = 'loaded' }
-rawset(_G, KEY, M)
+local STATE, LOG, PREV_LOG = 'chef_handoff_state.txt', 'chef_handoff.log', 'chef_handoff.previous.log'
 
 local sr = rawget(_G, 'stingray')
 local clock = 0
+-- CPU time, when there is a clock for it (not every loader gives its mods os, or os.clock)
+local has_cpu = type(os) == 'table' and type(os.clock) == 'function'
+local cpu = has_cpu and os.clock or function() return 0 end
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- files: the log and the state mark
@@ -53,13 +51,18 @@ local function folder()
   return base .. '\\Arrowhead\\Helldivers2\\'
 end
 
+-- true, or false and why not
 local function write_file(name, mode, text)
   local dir = folder()
-  if not dir or type(io) ~= 'table' or type(io.open) ~= 'function' then return false end
-  local ok, f = pcall(io.open, dir .. name, mode)
-  if not ok or not f then return false end
-  pcall(f.write, f, text)
+  if not dir then return false, 'no APPDATA folder' end
+  if type(io) ~= 'table' or type(io.open) ~= 'function' then return false, 'no io.open' end
+  local ok, f, err = pcall(io.open, dir .. name, mode)
+  if not ok then return false, tostring(f) end
+  if not f then return false, tostring(err) end
+  local okw, w, werr = pcall(f.write, f, text)
   pcall(f.close, f)
+  if not okw then return false, tostring(w) end
+  if not w then return false, tostring(werr) end
   return true
 end
 
@@ -73,53 +76,29 @@ local function read_file(name)
   return ok2 and text or nil
 end
 
+-- (never raises: it is called after require too, where nothing may stop the mark and the callbacks from being put right)
 local logged = 0
 local function log(fmt, ...)
   if logged > 60 then return end                 -- a few lines a launch: this is not a place for floods
   logged = logged + 1
   local ok, text = pcall(string.format, fmt, ...)
   if not ok then text = tostring(fmt) end
-  local stamp = '?'
-  pcall(function() stamp = os.date('%H:%M:%S') end)
-  write_file('chef_handoff.log', 'a', string.format('%s %6.1f s | %s\n', stamp, clock, text))
+  pcall(function()
+    local stamp = '?'
+    pcall(function() stamp = os.date('%H:%M:%S') end)
+    write_file(LOG, 'a', string.format('%s %6.1f s | %s\n', tostring(stamp), clock, tostring(text)))
+  end)
 end
 
--- ---------------------------------------------------------------------------------------------------------------------
--- what is there when this addon starts (to tell, from the log, how MDL3 starts addons)
--- ---------------------------------------------------------------------------------------------------------------------
-local function describe(name)
-  local v = rawget(_G, name)
-  if v == nil then return 'nil' end
-  if type(v) ~= 'table' then return type(v) end
-  local keys, n = {}, 0
-  for k, x in pairs(v) do
-    n = n + 1
-    if n <= 24 then keys[#keys + 1] = tostring(k) .. ':' .. type(x):sub(1, 1) end
-  end
-  table.sort(keys)
-  return string.format('table(%d: %s%s)', n, table.concat(keys, ' '), n > 24 and ' ...' or '')
+-- a value as text, whatever it is (an error object, Chef's read-only global ...)
+local function str(v)
+  local ok, s = pcall(tostring, v)
+  if ok and type(s) == 'string' then return s end
+  return '(' .. type(v) .. ')'
 end
 
 local same = rawget(_G, 'rawequal')              -- (not every loader gives its mods the whole base library)
 if type(same) ~= 'function' then same = function(a, b) return a == b end end
-
--- a function as the log shows it: its address (the same function has the same one all launch) and where it was defined
-local function where(f)
-  local d = rawget(_G, 'debug')
-  if type(d) ~= 'table' or type(d.getinfo) ~= 'function' then return '' end
-  local ok, info = pcall(d.getinfo, f, 'S')
-  if not ok or type(info) ~= 'table' then return '' end
-  if info.what == 'C' then return ' [C]' end
-  local src = tostring(info.short_src or info.source or '?')
-  if #src > 60 then src = '...' .. src:sub(-57) end
-  return string.format(' [%s:%s]', src, tostring(info.linedefined or '?'))
-end
-
-local function fn_text(f)
-  if type(f) ~= 'function' then return f == nil and 'nil' or type(f) end
-  local ok, s = pcall(tostring, f)
-  return (ok and type(s) == 'string' and (s:gsub('^function:%s*', '')) or 'function') .. where(f)
-end
 
 -- The game's own global table: the one the game reads init, update, render and shutdown from, and the one Chef's core gets as its
 -- globals when it is required (the running thread's globals: getfenv(0)). Under MDL3 3.0.0-dev.29 an addon runs in a sandbox of
@@ -140,6 +119,60 @@ local function game_globals()
   local rg, rs = rawget(g, 'rawget'), rawget(g, 'rawset')
   if type(rg) ~= 'function' or type(rs) ~= 'function' then rg, rs = rawget, rawset end
   return g, rg, rs, 'getfenv(0) (this addon\'s _G is a sandbox of its own, not the global table)'
+end
+
+-- One copy per Lua state. The mark of it is kept on the game's own global table, put there with that table's own rawset, not on
+-- this addon's _G: a loader that starts the addon again (a reload) gives it a new _G, and under MDL3 3.0.0-dev.43 a rawset on _G
+-- is MDL3's own, which puts the value on the game's table and takes it off again when MDL3 stops the addon (0.2.5 kept it there:
+-- a copy started again found nothing and started the log afresh). A second load in the same _G is the same copy. A copy started
+-- again in another _G while the first one still waits for its hand-off takes over (the first one may not be called any more);
+-- once the first one has done its part, the new one does nothing.
+local GT0, RG0, RS0 = game_globals()
+local okx, existing = pcall(RG0, GT0, KEY)
+if not okx or type(existing) ~= 'table' then existing = nil end
+if existing and (same(existing.env, _G) or existing.state ~= 'waiting') then
+  if not same(existing.env, _G) then
+    log('chef_handoff %s loaded again, in another _G (a loader started it again): the first copy has done its part (%s), so this one does nothing',
+      VERSION, str(existing.state))
+  end
+  return existing
+end
+local M = { version = VERSION, state = 'loaded', env = _G }
+if existing then existing.state = 'replaced' end
+if not pcall(RS0, GT0, KEY, M) then pcall(rawset, _G, KEY, M) end
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- what is there when this addon starts (to tell, from the log, how MDL3 starts addons)
+-- ---------------------------------------------------------------------------------------------------------------------
+local function describe(name)
+  local v = rawget(_G, name)
+  if v == nil then return 'nil' end
+  if type(v) ~= 'table' then return type(v) end
+  local keys, n = {}, 0
+  for k, x in pairs(v) do
+    n = n + 1
+    if n <= 24 then keys[#keys + 1] = tostring(k) .. ':' .. type(x):sub(1, 1) end
+  end
+  table.sort(keys)
+  return string.format('table(%d: %s%s)', n, table.concat(keys, ' '), n > 24 and ' ...' or '')
+end
+
+-- a function as the log shows it: its address (the same function has the same one all launch) and where it was defined
+local function where(f)
+  local d = rawget(_G, 'debug')
+  if type(d) ~= 'table' or type(d.getinfo) ~= 'function' then return '' end
+  local ok, info = pcall(d.getinfo, f, 'S')
+  if not ok or type(info) ~= 'table' then return '' end
+  if info.what == 'C' then return ' [C]' end
+  local src = tostring(info.short_src or info.source or '?')
+  if #src > 60 then src = '...' .. src:sub(-57) end
+  return string.format(' [%s:%s]', src, tostring(info.linedefined or '?'))
+end
+
+local function fn_text(f)
+  if type(f) ~= 'function' then return f == nil and 'nil' or type(f) end
+  local ok, s = pcall(tostring, f)
+  return (ok and type(s) == 'string' and (s:gsub('^function:%s*', '')) or 'function') .. where(f)
 end
 
 -- the four callbacks as they are on a table now (this addon's _G unless T, RG are given); taken: a table of the ones taken off,
@@ -200,14 +233,25 @@ local function env_text()
   return table.concat(parts, '; ')
 end
 
--- a new launch starts its log fresh
-write_file('chef_handoff.log', 'w', '')
-log('chef_handoff %s loaded; the game\'s update is a %s', VERSION, type(rawget(_G, 'update')))
-for _, name in ipairs({ 'CowboyBingusModLoader', 'HD2ModLoader', 'MDL3', 'MDL', 'HD2Data', 'ModOptionsMenu', 'ChefSharedLoader' }) do
-  log('  %s = %s', name, describe(name))
-end
-log('  the game\'s callbacks: %s', callbacks_text())
-do
+if existing then
+  log('chef_handoff %s loaded again, in another _G, while the first copy was still waiting for its hand-off (a loader started it again): this copy takes over',
+    VERSION)
+else
+  -- A new launch starts its log afresh. The last launch's is kept as chef_handoff.previous.log: it tells a launch that went on
+  -- past its hand-off from one that ended in it (see the state mark, below), and it is the one to send when that launch went wrong.
+  -- Not when Chef is running already: no hand-off comes then, and this may be a copy Chef started as one of its own mods (Chef
+  -- on top, or a loader that handed off before starting its addons), which Chef lets read only the logs it wrote itself.
+  local okc, chef_now = pcall(function() return RG0(GT0, 'ChefSharedLoader') or _G.ChefSharedLoader end)
+  if not (okc and chef_now ~= nil) then
+    local old = read_file(LOG)
+    if type(old) == 'string' and old ~= '' then write_file(PREV_LOG, 'w', old) end
+  end
+  write_file(LOG, 'w', '')
+  log('chef_handoff %s loaded; the game\'s update is a %s', VERSION, type(rawget(_G, 'update')))
+  for _, name in ipairs({ 'CowboyBingusModLoader', 'HD2ModLoader', 'MDL3', 'MDL', 'HD2Data', 'ModOptionsMenu', 'ChefSharedLoader' }) do
+    log('  %s = %s', name, describe(name))
+  end
+  log('  the game\'s callbacks: %s', callbacks_text())
   local GT, RG = game_globals()
   if GT ~= _G then log('  the game\'s callbacks (its global table): %s', callbacks_text(nil, GT, RG)) end
 end
@@ -308,14 +352,14 @@ end
 local function scan_chef_addons()
   local made, stats, rats = {}, { files = 0, addons = 0, errors = 0, deep = 0 }, {}
   if type(io) ~= 'table' or type(io.open) ~= 'function' then return made, stats, 'no io.open', rats end
-  local t0 = type(os) == 'table' and type(os.clock) == 'function' and os.clock() or 0
+  local t0 = cpu()
   local misses, n = 0, 0
   while misses < 8 do
     if scan_patch(n, made, stats, rats) then misses = 0 else misses = misses + 1 end
-    if type(os.clock) == 'function' and os.clock() - t0 > 0.5 then return made, stats, 'stopped after 0.5 s, at patch_' .. n, rats end
+    if has_cpu and cpu() - t0 > 0.5 then return made, stats, 'stopped after 0.5 s, at patch_' .. n, rats end
     n = n + 1
   end
-  stats.ms = type(os.clock) == 'function' and math.floor((os.clock() - t0) * 1000 + 0.5) or 0
+  stats.ms = has_cpu and math.floor((cpu() - t0) * 1000 + 0.5) or 0
   return made, stats, nil, rats
 end
 
@@ -432,7 +476,6 @@ end
 -- ---------------------------------------------------------------------------------------------------------------------
 local SLOW = 0.5                                     -- seconds of CPU time in one call of the chain worth a line in the log
 local COUNT_FRAMES = 600                             -- frames after the hand-off over which the update chain's runs are counted
-local cpu = (type(os) == 'table' and type(os.clock) == 'function') and os.clock or function() return 0 end
 
 -- Empty stand-ins, used instead of taking the callbacks off when the game's table guards the keys it does not have (a __newindex,
 -- or a metatable it hides): Chef sets its own callbacks with plain assignments, and on a missing key such a guard could send them
@@ -452,9 +495,9 @@ local function guards_new_keys(T)
 end
 
 -- takes the callbacks off the game's global table T (RG, RS: its rawget and rawset), or puts a stand-in on each of the four keys
--- (standins; on the empty ones too, so that every callback Chef sets lands on the table): what is returned is what was there
-local function stash_callbacks(T, RG, RS, standins)
-  local saved = {}
+-- (standins; on the empty ones too, so that every callback Chef sets lands on the table): what was there goes into saved, one by
+-- one (so that a failure half-way still knows what to put back), and saved is returned
+local function stash_callbacks(T, RG, RS, standins, saved)
   for _, k in ipairs(KEYS) do
     local f = RG(T, k)
     if type(f) == 'function' then saved[k] = f end
@@ -551,13 +594,89 @@ local function hook_state()
   return string.format('%s (mask "%s", count %s)', tostring(h), tostring(m or ''), tostring(c or 0))
 end
 
+-- what f gives, or what went wrong, as text (for log lines that must not raise)
+local function safe(f, ...)
+  local ok, v = pcall(f, ...)
+  if ok then return v end
+  return 'could not tell: ' .. str(v)
+end
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- the state mark
+-- ---------------------------------------------------------------------------------------------------------------------
+-- chef_handoff_state.txt says "attempt <version> <time>" while Chef loads, then "ok <version>" or "failed <version>". A launch
+-- that finds "attempt" there takes the last one for one that ended in the hand-off (the game closed or crashed while Chef loaded)
+-- and does not hand off, so that a crash in Chef's load does not come back at every launch.
+-- 0.2.5 wrote "ok" only once the callbacks were back and the log lines written, and a player on Chef Shared Loader 1.5.3 and MDL3
+-- 3.0.0-dev.43 found "attempt" left after every launch that worked (issue #4): every launch after it skipped the hand-off. So the
+-- mark is written as soon as require is back, before anything else, and read back; one that did not land is written again on
+-- the next frames. The log's line right after require names the attempt by its time, and the next launch, which finds "attempt"
+-- with that time, reads the last launch's log (chef_handoff.previous.log): with that line in it, that launch went on past its
+-- hand-off and the hand-off goes ahead. A mark left by another version of this addon gets one more try too.
+local function back_key(stamp) return 'back from require (attempt ' .. tostring(stamp or '?') .. ')' end
+
+local function launch_stamp()
+  local ok, s = pcall(function() return os.date('%Y-%m-%dT%H:%M:%S') end)
+  if ok and type(s) == 'string' and s:find('^%d%d%d%d%-%d%d%-%d%dT') then return s end
+  return nil
+end
+
+-- writes the mark and reads it back: true, or false and why not
+local function put_mark(text)
+  local ok, why = write_file(STATE, 'w', text)
+  if not ok then return false, why end
+  local back = read_file(STATE)
+  if type(back) ~= 'string' or (back:gsub('%s+$', '')) ~= (text:gsub('%s+$', '')) then
+    return false, 'it reads back as ' .. (type(back) == 'string' and string.format('%q', back:sub(1, 40)) or 'nothing')
+  end
+  return true
+end
+
+local function settle(started)
+  local ok, why = put_mark((started and 'ok ' or 'failed ') .. VERSION .. '\n')
+  if ok then M.mark_done = true end
+  return ok, why
+end
+
+-- Chef's global, on the game's table or (where there is no other) on this addon's _G
+local function chef_global(GT, RG)
+  local ok, v = pcall(RG, GT, 'ChefSharedLoader')
+  if ok and v ~= nil then return v end
+  ok, v = pcall(rawget, _G, 'ChefSharedLoader')
+  if ok then return v end
+  return nil
+end
+
+-- On the frames after a hand-off whose mark did not land (a write that failed, or an error that cut the hand-off short after the
+-- "attempt"): written again every 30 frames, 20 times, as the frame finds it ("ok" if Chef is running).
+local late = { wait = 0, tries = 0 }
+local function settle_late()
+  if late.wait > 0 then late.wait = late.wait - 1 return end
+  late.tries = late.tries + 1
+  local GT, RG = game_globals()
+  local running = chef_global(GT, RG) ~= nil
+  local ok, why = settle(running)
+  if ok then
+    log('chef_handoff_state.txt written on a later frame (try %d): %s', late.tries,
+      running and 'ok (Chef is running)' or 'failed (Chef is not running)')
+  elseif late.tries >= 20 then
+    M.mark_done = true                           -- (no more tries)
+    log('chef_handoff_state.txt could not be written in %d tries (%s): it still says "attempt". The next launch reads this log ' ..
+      '(as chef_handoff.previous.log) to tell that this one went on', late.tries, str(why))
+  else
+    late.wait = 30
+  end
+end
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- the hand-off
+-- ---------------------------------------------------------------------------------------------------------------------
 local function handoff()
   local GT, RG, RS, which = game_globals()
-  local running = RG(GT, 'ChefSharedLoader')
-  if running == nil then running = rawget(_G, 'ChefSharedLoader') end
+  local running = chef_global(GT, RG)
   if running ~= nil then
     M.state = 'chef already running'
-    log('Chef Shared Loader is running already (version %s): nothing to do', tostring(field(running, 'version')))
+    log('Chef Shared Loader is running already (version %s): nothing to do', str(field(running, 'version')))
     return
   end
   local A = type(sr) == 'table' and sr.Application or nil
@@ -569,91 +688,126 @@ local function handoff()
   local okc, has = pcall(A.can_get, 'lua', CORE)
   if not okc or has ~= true then
     M.state = 'chef not installed'
-    log('Chef Shared Loader is not installed (can_get(\'lua\', \'%s\') = %s): nothing to do', CORE, tostring(okc and has or has))
+    log('Chef Shared Loader is not installed (can_get(\'lua\', \'%s\') = %s): nothing to do', CORE, str(okc and has or has))
     return
   end
-  -- A launch that ended during an earlier hand-off left its mark: do not try again until the mark is deleted.
-  local mark = read_file('chef_handoff_state.txt')
+  -- A launch that ended during an earlier hand-off left its mark: do not try again until the mark is deleted (unless the last
+  -- launch's log shows that the hand-off it names came back, or the mark is another version's).
+  local mark = read_file(STATE)
   if type(mark) == 'string' and mark:find('^attempt') then
-    M.state = 'skipped after a crash'
-    log('the last launch ended during the hand-off (chef_handoff_state.txt says "%s"): not trying again. Delete that file to try once more.',
-      (mark:gsub('%s+$', '')))
-    return
+    local shown = (mark:gsub('%s+$', ''))
+    local mver, mstamp = mark:match('^attempt%s+(%S+)%s*(%S*)')
+    local prev = read_file(PREV_LOG)
+    if mstamp and mstamp ~= '' and type(prev) == 'string' and prev:find(back_key(mstamp), 1, true) then
+      log('chef_handoff_state.txt says "%s", but %s says that hand-off came back from require: that launch went on (the mark ' ..
+        'after it did not land). Handing off.', shown, PREV_LOG)
+    elseif mver and mver ~= VERSION then
+      log('chef_handoff_state.txt says "%s": the last launch ended during a hand-off by chef_handoff %s. This is %s: trying once ' ..
+        'more (if this launch ends in the hand-off too, the next one does not try).', shown, mver, VERSION)
+    else
+      M.state = 'skipped after a crash'
+      log('the last launch ended during the hand-off (chef_handoff_state.txt says "%s"): not trying again. Delete that file to try once more.',
+        shown)
+      return
+    end
   end
   local okr, errr = pcall(release_chef_addons)
-  if not okr then log('could not look for Chef addons already started by MDL3: %s', tostring(errr)) end
+  if not okr then log('could not look for Chef addons already started by MDL3: %s', str(errr)) end
   local sandboxed = GT ~= _G
   local where_cb = sandboxed and ' (its global table)' or ''
   log('handing off: require(\'%s\') with the note { from = ..., phase = \'init\' } (the game has called init long ago)', CORE)
   log('the game\'s global table: %s', which)
-  log('debug hook before: %s', hook_state())
-  local oke, envt = pcall(env_text)
-  log('around the globals: %s', oke and envt or ('could not tell: ' .. tostring(envt)))
-  local okc, cbt = pcall(callbacks_text, nil, GT, RG)
-  log('the game\'s callbacks before%s: %s', where_cb, okc and cbt or ('could not tell: ' .. tostring(cbt)))
+  log('debug hook before: %s', safe(hook_state))
+  log('around the globals: %s', safe(env_text))
+  log('the game\'s callbacks before%s: %s', where_cb, safe(callbacks_text, nil, GT, RG))
   local standins = guards_new_keys(GT)
   if standins then
     log('the game\'s global table guards the keys it does not have: the callbacks are replaced by empty stand-ins while Chef loads, not taken off (Chef keeps the stand-ins)')
   end
-  write_file('chef_handoff_state.txt', 'w', 'attempt ' .. VERSION .. '\n')
+  local stamp = launch_stamp()
+  write_file(STATE, 'w', 'attempt ' .. VERSION .. (stamp and (' ' .. stamp) or '') .. '\n')
+  M.attempted, late.wait = true, 1               -- (from the next frame on, a mark that did not land is written again)
   -- From here until Chef has read the globals nothing runs but rawset and require: no log line, no file (whatever put a callback
   -- back on the game's table in that time would show it to Chef). The callbacks come off the game's own table, where Chef's core
   -- reads them, not off this addon's _G: under MDL3 that is a sandbox of its own (0.2.1 and 0.2.2 took them off the sandbox, and
   -- Chef 1.5.1 in the game still found MDL3's update and shutdown).
-  local saved = stash_callbacks(GT, RG, RS, standins)
-  local still = {}
-  for _, k in ipairs(KEYS) do
-    local v = RG(GT, k)
-    if standins and v ~= STANDIN[k] or not standins and v ~= nil and saved[k] ~= nil then still[#still + 1] = k end
+  local saved, still = {}, {}
+  local oks, errs = pcall(function()
+    stash_callbacks(GT, RG, RS, standins, saved)
+    for _, k in ipairs(KEYS) do
+      local v = RG(GT, k)
+      if standins and v ~= STANDIN[k] or not standins and v ~= nil and saved[k] ~= nil then still[#still + 1] = k end
+    end
+    RS(GT, 'ChefSharedLoaderHandoff', { from = 'MDL3 chef_handoff ' .. VERSION, phase = 'init' })
+  end)
+  if not oks then
+    for _, k in ipairs(KEYS) do
+      local okg, v = pcall(RG, GT, k)
+      if saved[k] ~= nil or (okg and v ~= nil and v == STANDIN[k]) then pcall(RS, GT, k, saved[k]) end
+    end
+    pcall(RS, GT, 'ChefSharedLoaderHandoff', nil)
+    M.state = 'hand-off failed'
+    pcall(settle, false)
+    log('taking the game\'s callbacks off failed (%s): they are back as they were, and Chef is not handed the game', str(errs))
+    return
   end
-  RS(GT, 'ChefSharedLoaderHandoff', { from = 'MDL3 chef_handoff ' .. VERSION, phase = 'init' })
   local ok, err = pcall(require, CORE)
-  RS(GT, 'ChefSharedLoaderHandoff', nil)
-  local chef = RG(GT, 'ChefSharedLoader')
-  if chef == nil then chef = rawget(_G, 'ChefSharedLoader') end
+  -- From here on each step is protected or cannot raise: the mark is written and the callbacks go back whatever happens.
+  local okn, errn = pcall(RS, GT, 'ChefSharedLoaderHandoff', nil)
+  local chef = chef_global(GT, RG)
+  local started = ok and chef ~= nil
+  local okm, wrote, why = pcall(settle, started)
+  M.state = started and 'chef started' or 'hand-off failed'
+  if started then
+    log('%s: Chef Shared Loader %s started (api %s). Its own log is chef_loader.log.', back_key(stamp),
+      str(field(chef, 'version')), str(field(chef, 'api')))
+  else
+    log('%s: the hand-off did not start Chef (require %s: %s; ChefSharedLoader = %s)', back_key(stamp), str(ok), str(err), str(chef))
+  end
+  if not (okm and wrote) then
+    late.wait = 30
+    log('chef_handoff_state.txt could not be written (%s): trying again on the next frames', str(okm and why or wrote))
+  end
+  if not okn then log('taking the note off the game\'s global table failed: %s', str(errn)) end
   if #still > 0 then
     local on = sandboxed and 'the game\'s global table' or 'the globals'
     if standins then log('not replaced by the stand-ins on %s: %s', on, table.concat(still, ', '))
     else log('still on %s right after they were taken off: %s', on, table.concat(still, ', ')) end
   end
-  log('debug hook after: %s', hook_state())
-  local oka, cba = pcall(callbacks_text, saved, GT, RG)
-  log('the game\'s callbacks after Chef loaded%s: %s', where_cb, oka and cba or ('could not tell: ' .. tostring(cba)))
+  log('debug hook after: %s', safe(hook_state))
+  log('the game\'s callbacks after Chef loaded%s: %s', where_cb, safe(callbacks_text, saved, GT, RG))
   chain_base = M.chain_runs
-  local okb, errb = pcall(restore_callbacks, GT, RG, RS, saved, ok and chef ~= nil)
+  local okb, errb = pcall(restore_callbacks, GT, RG, RS, saved, started)
   if not okb then
-    log('putting the callbacks back failed: %s', tostring(errb))
+    log('putting the callbacks back failed: %s', str(errb))
     for _, k in ipairs(KEYS) do
-      local v = RG(GT, k)
-      if v == nil or v == STANDIN[k] then RS(GT, k, saved[k]) end
+      local okg, v = pcall(RG, GT, k)
+      if not okg or v == nil or v == STANDIN[k] then pcall(RS, GT, k, saved[k]) end
     end
-  end
-  if ok and chef ~= nil then
-    M.state = 'chef started'
-    write_file('chef_handoff_state.txt', 'w', 'ok ' .. VERSION .. '\n')
-    log('Chef Shared Loader %s started (api %s). Its own log is chef_loader.log.',
-      tostring(field(chef, 'version')), tostring(field(chef, 'api')))
-  else
-    M.state = 'hand-off failed'
-    write_file('chef_handoff_state.txt', 'w', 'failed ' .. VERSION .. '\n')
-    log('the hand-off did not start Chef (require %s: %s; ChefSharedLoader = %s)', tostring(ok), tostring(err), tostring(chef))
   end
 end
 
 -- the first frames after the delay
-local function tick(dt)
-  clock = clock + ((type(dt) == 'number' and dt > 0 and dt < 1) and dt or 1 / 60)
+local function tick()
   if clock >= DELAY - 1 and not scanned then
     local ok, err = pcall(prepare_scan)
-    if not ok then scanned = { made = {}, stats = { files = 0, addons = 0, errors = 1 }, note = tostring(err) } end
+    if not ok then scanned = { made = {}, stats = { files = 0, addons = 0, errors = 1 }, note = str(err), rats = {} } end
   end
   if clock < DELAY then return end
   M.state = 'handing off'
   local ok, err = pcall(handoff)
   if not ok then
     M.state = 'error'
-    log('error in the hand-off: %s', tostring(err))
+    log('error in the hand-off: %s', str(err))
   end
+end
+
+-- every frame: the clock (game time, the frames' dt added up; one huge dt, a loading hitch, counts as one frame), the hand-off
+-- once it is due, and a mark that did not land
+local function frame(dt)
+  clock = clock + ((type(dt) == 'number' and dt > 0 and dt < 1) and dt or 1 / 60)
+  if M.state == 'waiting' then tick() end
+  if M.attempted and not M.mark_done then pcall(settle_late) end
 end
 
 -- hooked the way the BF5 MDL3 build hooks: chain the game's update global. At the hand-off the chain is taken off the global
@@ -663,14 +817,14 @@ if type(prev) == 'function' then
   M.state = 'waiting'
   rawset(_G, 'update', function(dt, ...)
     M.chain_runs = M.chain_runs + 1
-    if M.state == 'waiting' then tick(dt) end
+    frame(dt)
     return prev(dt, ...)
   end)
 else
   local L = rawget(_G, 'CowboyBingusModLoader')
   if type(L) == 'table' and type(L.on_update) == 'function' then
     M.state = 'waiting'
-    pcall(L.on_update, 'chef_handoff', function(dt) if M.state == 'waiting' then tick(dt) end end)
+    pcall(L.on_update, 'chef_handoff', function(dt) frame(dt) end)
     log('no update global: hooked through CowboyBingusModLoader.on_update')
   else
     M.state = 'no hook'
